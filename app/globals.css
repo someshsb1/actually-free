@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #f8faf7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(248, 250, 247, 0.9), rgba(248, 250, 247, 1)),
+    url("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1600&q=80");
+  background-attachment: fixed;
+  background-position: center top;
+  background-size: cover;
+  color: #1f2933;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 3px solid rgba(55, 126, 138, 0.45);
+  outline-offset: 2px;
+}
+
+.screen-shell {
+  min-height: 100vh;
+}
+
+@layer components {
+  .field {
+    min-height: 48px;
+    width: 100%;
+    border-radius: 6px;
+    border: 1px solid rgba(31, 41, 51, 0.16);
+    background: white;
+    padding: 0.75rem;
+    color: #1f2933;
+    font-weight: 700;
+  }
+}
