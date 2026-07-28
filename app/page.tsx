@@ -1,13 +1,13 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { demoVenues } from "@/lib/demo-venues";
 import {
   ActivityType,
   Participant,
   Plan,
   RankedVenue,
   TimeSlot,
-  Venue,
   Vote,
   VoteValue,
   buildGoogleCalendarUrl,
@@ -21,6 +21,13 @@ import {
 } from "@/lib/planning";
 
 type Screen = "landing" | "create" | "invite" | "join" | "status" | "vote" | "final";
+
+type PlanBundle = {
+  plan: Plan;
+  participants: Participant[];
+  venues: typeof demoVenues;
+  votes: Vote[];
+};
 
 const activityOptions: ActivityType[] = ["dinner", "brunch", "drinks", "coffee", "activity"];
 const dietaryOptions = ["vegetarian", "vegan", "gluten-free", "halal", "no pork"];
@@ -80,69 +87,6 @@ const seededParticipants: Participant[] = [
 
 const expectedGuests = ["Maya", "Jordan", "Alex", "Sam", "Priya"];
 
-const venues: Venue[] = [
-  {
-    id: "tacombi",
-    externalPlaceId: "mock-tacombi-flatiron",
-    name: "Tacombi Flatiron",
-    address: "30 W 24th St, New York, NY",
-    category: "Mexican",
-    pricePerPerson: 35,
-    priceLevel: "$$",
-    rating: 4.5,
-    bookingUrl: "https://www.tacombi.com/",
-    dietaryTags: ["vegetarian", "gluten-free"],
-    travelTimes: { maya: 28, jordan: 24, alex: 12, sam: 32, priya: 36 },
-    bookingConfidence: 0.84,
-    why: "Balanced travel from Queens and Manhattan, flexible menu, and a realistic reservation window."
-  },
-  {
-    id: "namkeen",
-    externalPlaceId: "mock-namkeen",
-    name: "Namkeen",
-    address: "114 Kenmare St, New York, NY",
-    category: "Pakistani",
-    pricePerPerson: 28,
-    priceLevel: "$$",
-    rating: 4.6,
-    bookingUrl: "https://www.namkeennyc.com/",
-    dietaryTags: ["halal", "vegetarian", "no pork"],
-    travelTimes: { maya: 35, jordan: 31, alex: 24, sam: 30, priya: 38 },
-    bookingConfidence: 0.68,
-    why: "Under budget, strong dietary fit, and no attendee has a sharply worse trip."
-  },
-  {
-    id: "rubirosa",
-    externalPlaceId: "mock-rubirosa",
-    name: "Rubirosa",
-    address: "235 Mulberry St, New York, NY",
-    category: "Italian",
-    pricePerPerson: 46,
-    priceLevel: "$$",
-    rating: 4.7,
-    bookingUrl: "https://www.rubirosanyc.com/",
-    dietaryTags: ["vegetarian", "gluten-free"],
-    travelTimes: { maya: 40, jordan: 36, alex: 26, sam: 28, priya: 42 },
-    bookingConfidence: 0.62,
-    why: "High rating and good preferences fit, with one attendee just above the travel target."
-  },
-  {
-    id: "queensboro",
-    externalPlaceId: "mock-queensboro",
-    name: "The Queensboro",
-    address: "80-02 Northern Blvd, Jackson Heights, NY",
-    category: "New American",
-    pricePerPerson: 38,
-    priceLevel: "$$",
-    rating: 4.4,
-    bookingUrl: "https://thequeensboro.com/",
-    dietaryTags: ["vegetarian", "gluten-free", "vegan"],
-    travelTimes: { maya: 18, jordan: 20, alex: 48, sam: 32, priya: 31 },
-    bookingConfidence: 0.78,
-    why: "Excellent Queens access and broad menu, but a longer ride for one Manhattan attendee."
-  }
-];
-
 const seededVotes: Vote[] = [
   { participantId: "maya", venueId: "tacombi", vote: "first" },
   { participantId: "maya", venueId: "namkeen", vote: "acceptable" },
@@ -152,12 +96,18 @@ const seededVotes: Vote[] = [
 ];
 
 export default function Home() {
+  return <ActuallyFreeApp />;
+}
+
+export function ActuallyFreeApp() {
   const [screen, setScreen] = useState<Screen>("landing");
   const [plan, setPlan] = useState<Plan>(initialPlan);
   const [participants, setParticipants] = useState<Participant[]>(seededParticipants);
+  const [planVenues, setPlanVenues] = useState(demoVenues);
   const [votes, setVotes] = useState<Vote[]>(seededVotes);
   const [selectedVenueId, setSelectedVenueId] = useState("tacombi");
   const [confirmed, setConfirmed] = useState(false);
+  const [notice, setNotice] = useState("Demo mode until Supabase env vars are added.");
   const [joinName, setJoinName] = useState("Priya");
   const [joinLocation, setJoinLocation] = useState("Sunnyside");
   const [joinBudget, setJoinBudget] = useState(50);
@@ -166,21 +116,49 @@ export default function Home() {
 
   const rankedTimes = useMemo(() => rankAvailability(plan, participants), [plan, participants]);
   const bestTime = rankedTimes[0];
-  const rankedVenues = useMemo(() => scoreVenues(plan, participants, venues), [participants, plan]);
+  const rankedVenues = useMemo(() => scoreVenues(plan, participants, planVenues), [participants, plan, planVenues]);
   const voteTotals = useMemo(
     () => calculateVoteTotals(votes, rankedVenues.map((venue) => venue.id)),
     [rankedVenues, votes]
   );
   const selectedVenue = rankedVenues.find((venue) => venue.id === selectedVenueId) ?? rankedVenues[0];
-  const inviteUrl = `https://actuallyfree.app/join/${plan.inviteCode}`;
+  const inviteUrl =
+    typeof window === "undefined" ? `/join/${plan.inviteCode}` : `${window.location.origin}/join/${plan.inviteCode}`;
 
-  function createPlan(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    const inviteCode = window.location.pathname.match(/^\/join\/([^/]+)/)?.[1] ?? new URLSearchParams(window.location.search).get("invite");
+    if (inviteCode) {
+      void loadPlan(inviteCode);
+    }
+  }, []);
+
+  async function loadPlan(inviteCode: string) {
+    try {
+      const bundle = await apiRequest<PlanBundle>(`/api/plans/${inviteCode}`);
+      applyPlanBundle(bundle);
+      setScreen("join");
+      setNotice("Plan loaded from Supabase.");
+    } catch (error) {
+      setNotice(apiFallbackMessage(error, "Could not load this invite from Supabase."));
+    }
+  }
+
+  function applyPlanBundle(bundle: PlanBundle) {
+    const participantsWithDates = bundle.participants.map(normalizeParticipant);
+    setPlan(bundle.plan);
+    setParticipants(participantsWithDates);
+    setPlanVenues(bundle.venues);
+    setVotes(bundle.votes);
+    setSelectedVenueId(bundle.venues[0]?.id ?? "tacombi");
+    setConfirmed(bundle.plan.status === "confirmed");
+  }
+
+  async function createPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const startDate = String(form.get("startDate"));
     const inviteCode = `AF-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    setPlan({
+    const nextPlan = {
       id: crypto.randomUUID(),
       title: String(form.get("title") || "Untitled plan"),
       activityType: String(form.get("activityType")) as ActivityType,
@@ -193,16 +171,29 @@ export default function Home() {
       organizerName: String(form.get("organizerName") || "Organizer"),
       inviteCode,
       preferredDate: startDate,
-      status: "collecting",
+      status: "collecting" as const,
       createdAt: new Date().toISOString()
-    });
+    };
+
+    try {
+      const bundle = await apiRequest<PlanBundle>("/api/plans", {
+        method: "POST",
+        body: JSON.stringify(nextPlan)
+      });
+      applyPlanBundle(bundle);
+      setNotice("Plan saved to Supabase.");
+    } catch (error) {
+      setPlan(nextPlan);
+      setPlanVenues(demoVenues);
+      setNotice(apiFallbackMessage(error, "Supabase is not configured, so this plan is only in this browser session."));
+    }
     setParticipants([]);
     setVotes([]);
     setConfirmed(false);
     setScreen("invite");
   }
 
-  function addParticipant(event: FormEvent<HTMLFormElement>) {
+  async function addParticipant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const id = joinName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || crypto.randomUUID();
     const availability = joinAvailability.map((value) => {
@@ -210,25 +201,66 @@ export default function Home() {
       return { start, end: new Date(start.getTime() + 150 * 60 * 1000) };
     });
 
-    setParticipants((current) => [
-      ...current.filter((participant) => participant.id !== id),
-      {
-        id,
-        name: joinName,
-        startingLocation: joinLocation,
-        budgetMax: joinBudget,
-        dietaryPreferences: joinDietary,
-        availability
-      }
-    ]);
+    const nextParticipant = {
+      id,
+      name: joinName,
+      startingLocation: joinLocation,
+      budgetMax: joinBudget,
+      dietaryPreferences: joinDietary,
+      availability
+    };
+
+    try {
+      const response = await apiRequest<{ participant: Participant }>(`/api/plans/${plan.inviteCode}/participants`, {
+        method: "POST",
+        body: JSON.stringify(nextParticipant)
+      });
+      const participant = normalizeParticipant(response.participant);
+      setParticipants((current) => [...current.filter((item) => item.id !== participant.id), participant]);
+      setNotice("Response saved to Supabase.");
+    } catch (error) {
+      setParticipants((current) => [...current.filter((participant) => participant.id !== id), nextParticipant]);
+      setNotice(apiFallbackMessage(error, "Supabase is not configured, so this response is only in this browser session."));
+    }
     setScreen("status");
   }
 
-  function setVote(participantId: string, venueId: string, vote: VoteValue) {
+  async function setVote(participantId: string, venueId: string, vote: VoteValue) {
     setVotes((current) => [
       ...current.filter((item) => !(item.participantId === participantId && item.venueId === venueId)),
       { participantId, venueId, vote }
     ]);
+
+    try {
+      await apiRequest(`/api/plans/${plan.inviteCode}/votes`, {
+        method: "PUT",
+        body: JSON.stringify({ participantId, venueId, vote })
+      });
+      setNotice("Vote saved to Supabase.");
+    } catch (error) {
+      setNotice(apiFallbackMessage(error, "Supabase is not configured, so this vote is only in this browser session."));
+    }
+  }
+
+  async function confirmFinalPlan() {
+    if (!bestTime || !selectedVenue) return;
+    setConfirmed(true);
+    setPlan((current) => ({ ...current, status: "confirmed" }));
+
+    try {
+      await apiRequest(`/api/plans/${plan.inviteCode}/final`, {
+        method: "PUT",
+        body: JSON.stringify({
+          venueId: selectedVenue.id,
+          confirmedBy: plan.organizerName,
+          slot: bestTime
+        })
+      });
+      setNotice("Final plan saved to Supabase.");
+    } catch (error) {
+      setNotice(apiFallbackMessage(error, "Supabase is not configured, so this confirmation is only in this browser session."));
+    }
+    setScreen("final");
   }
 
   function downloadIcs() {
@@ -246,6 +278,7 @@ export default function Home() {
     <main className="screen-shell">
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <TopBar screen={screen} setScreen={setScreen} />
+        <p className="mb-4 rounded-md bg-white/90 px-3 py-2 text-sm font-bold text-ink/70 shadow-soft">{notice}</p>
 
         {screen === "landing" && <Landing onCreate={() => setScreen("create")} />}
         {screen === "create" && <CreatePlanForm plan={plan} onSubmit={createPlan} />}
@@ -287,11 +320,7 @@ export default function Home() {
             selectedVenueId={selectedVenueId}
             setSelectedVenueId={setSelectedVenueId}
             setVote={setVote}
-            onConfirm={() => {
-              setConfirmed(true);
-              setPlan((current) => ({ ...current, status: "confirmed" }));
-              setScreen("final");
-            }}
+            onConfirm={confirmFinalPlan}
           />
         )}
         {screen === "final" && bestTime && selectedVenue && (
@@ -746,4 +775,36 @@ function titleCase(value: string): string {
 function formatSlotLabel(value: string): string {
   const start = new Date(value);
   return formatSlot({ start, end: new Date(start.getTime() + 150 * 60 * 1000) });
+}
+
+async function apiRequest<T = unknown>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers
+    }
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(typeof body.error === "string" ? body.error : "Request failed.");
+  }
+
+  return body as T;
+}
+
+function normalizeParticipant(participant: Participant): Participant {
+  return {
+    ...participant,
+    availability: participant.availability.map((slot) => ({
+      start: new Date(slot.start),
+      end: new Date(slot.end)
+    }))
+  };
+}
+
+function apiFallbackMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : "";
+  return message ? `${fallback} ${message}` : fallback;
 }

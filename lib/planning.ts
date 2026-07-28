@@ -18,7 +18,7 @@ export type Plan = {
   organizerName: string;
   inviteCode: string;
   preferredDate: string;
-  status: "draft" | "collecting" | "voting" | "confirmed";
+  status: "draft" | "collecting" | "voting" | "confirmed" | "cancelled";
   createdAt: string;
 };
 
@@ -170,11 +170,13 @@ export function scoreVenues(plan: Plan, participants: Participant[], venues: Ven
 
   return venues
     .map((venue) => {
-      const travelValues = participants.map((participant) => venue.travelTimes[participant.id] ?? plan.maxTravelMinutes);
+      const travelValues = participants.length
+        ? participants.map((participant) => venue.travelTimes[participant.id] ?? plan.maxTravelMinutes)
+        : Object.values(venue.travelTimes).slice(0, 3);
       const averageTravelTime = Math.round(
         travelValues.reduce((total, minutes) => total + minutes, 0) / Math.max(travelValues.length, 1)
       );
-      const worstTravelTime = Math.max(...travelValues);
+      const worstTravelTime = travelValues.length ? Math.max(...travelValues) : plan.maxTravelMinutes;
       const overLimitPenalty = Math.max(0, worstTravelTime - plan.maxTravelMinutes) * 2.5;
       const fairnessPenalty = Math.max(0, worstTravelTime - averageTravelTime) * 1.5;
       const travelConvenience = Math.max(0, 100 - averageTravelTime - overLimitPenalty - fairnessPenalty);

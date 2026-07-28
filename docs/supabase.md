@@ -47,3 +47,34 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
+
+## Vercel Environment Variables
+
+In Supabase:
+
+1. Open your project.
+2. Go to **Project Settings** > **API**.
+3. Copy the project URL into `NEXT_PUBLIC_SUPABASE_URL`.
+4. Copy the anon public key into `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+5. Copy the service role key into `SUPABASE_SERVICE_ROLE_KEY`.
+
+In Vercel:
+
+1. Open the `actually-free` project.
+2. Go to **Settings** > **Environment Variables**.
+3. Add all three variables for Production, Preview, and Development.
+4. Redeploy the latest `main` branch.
+
+Keep `SUPABASE_SERVICE_ROLE_KEY` server-only. Do not prefix it with `NEXT_PUBLIC_`.
+
+## Backend Routes
+
+The app now persists through these Next.js API routes:
+
+- `POST /api/plans`
+- `GET /api/plans/:inviteCode`
+- `POST /api/plans/:inviteCode/participants`
+- `PUT /api/plans/:inviteCode/votes`
+- `PUT /api/plans/:inviteCode/final`
+
+If the Supabase environment variables are missing, the UI falls back to demo browser state and shows a notice.

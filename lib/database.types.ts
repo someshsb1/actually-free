@@ -44,6 +44,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["plans"]["Insert"]>;
+        Relationships: [];
       };
       participants: {
         Row: {
@@ -67,6 +68,15 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["participants"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "participants_plan_id_fkey";
+            columns: ["plan_id"];
+            isOneToOne: false;
+            referencedRelation: "plans";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       availability: {
         Row: {
@@ -86,6 +96,15 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["availability"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "availability_participant_id_fkey";
+            columns: ["participant_id"];
+            isOneToOne: false;
+            referencedRelation: "participants";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       venues: {
         Row: {
@@ -131,6 +150,15 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["venues"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "venues_plan_id_fkey";
+            columns: ["plan_id"];
+            isOneToOne: false;
+            referencedRelation: "plans";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       votes: {
         Row: {
@@ -150,6 +178,22 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["votes"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "votes_participant_id_fkey";
+            columns: ["participant_id"];
+            isOneToOne: false;
+            referencedRelation: "participants";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "votes_venue_id_fkey";
+            columns: ["venue_id"];
+            isOneToOne: false;
+            referencedRelation: "venues";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       final_plans: {
         Row: {
@@ -171,7 +215,26 @@ export type Database = {
           confirmed_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["final_plans"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "final_plans_plan_id_fkey";
+            columns: ["plan_id"];
+            isOneToOne: true;
+            referencedRelation: "plans";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "final_plans_venue_id_fkey";
+            columns: ["venue_id"];
+            isOneToOne: false;
+            referencedRelation: "venues";
+            referencedColumns: ["id"];
+          }
+        ];
       };
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 };
