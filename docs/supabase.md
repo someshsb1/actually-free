@@ -46,6 +46,7 @@ Expected environment variables for that next step:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+GOOGLE_MAPS_API_KEY=
 ```
 
 ## Vercel Environment Variables
@@ -67,6 +68,8 @@ In Vercel:
 
 Keep `SUPABASE_SERVICE_ROLE_KEY` server-only. Do not prefix it with `NEXT_PUBLIC_`.
 
+`GOOGLE_MAPS_API_KEY` is optional. When present, the server uses Google Places Text Search for real venue candidates and Google Distance Matrix for travel estimates. Without it, the app falls back to local placeholder recommendations based on the plan city and area.
+
 ## Backend Routes
 
 The app now persists through these Next.js API routes:
@@ -76,5 +79,6 @@ The app now persists through these Next.js API routes:
 - `POST /api/plans/:inviteCode/participants`
 - `PUT /api/plans/:inviteCode/votes`
 - `PUT /api/plans/:inviteCode/final`
+- `PUT /api/plans/:inviteCode/status`
 
 If the Supabase environment variables are missing, the UI falls back to demo browser state and shows a notice.

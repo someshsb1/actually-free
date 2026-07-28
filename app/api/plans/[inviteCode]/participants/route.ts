@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { apiErrorResponse } from "@/lib/api/errors";
-import { addParticipantRecord } from "@/lib/supabase/plans";
+import { addParticipantRecord, refreshTravelTimesForPlan } from "@/lib/supabase/plans";
 import { createServiceClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request, context: { params: Promise<{ inviteCode: string }> }) {
   try {
     const { inviteCode } = await context.params;
     const body = await request.json();
-    const participant = await addParticipantRecord(createServiceClient(), inviteCode, {
+    const supabase = createServiceClient();
+    const participant = await addParticipantRecord(supabase, inviteCode, {
       name: String(body.name || ""),
       startingLocation: String(body.startingLocation || ""),
       budgetMax: Number(body.budgetMax),
@@ -20,7 +21,9 @@ export async function POST(request: Request, context: { params: Promise<{ invite
         : []
     });
 
-    return NextResponse.json({ participant });
+    const bundle = await refreshTravelTimesForPlan(supabase, inviteCode);
+
+    return NextResponse.json({ participant, bundle });
   } catch (error) {
     return apiErrorResponse(error, "Unable to add participant.");
   }

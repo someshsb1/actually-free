@@ -55,8 +55,8 @@ export default function Home() {
   return <ActuallyFreeApp />;
 }
 
-export function ActuallyFreeApp() {
-  const [screen, setScreen] = useState<Screen>("landing");
+export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?: Screen }) {
+  const [screen, setScreen] = useState<Screen>(initialScreen);
   const [plan, setPlan] = useState<Plan>(initialPlan);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [planVenues, setPlanVenues] = useState(() => suggestVenuesForPlan(initialPlan));
@@ -83,20 +83,30 @@ export function ActuallyFreeApp() {
 
   useEffect(() => {
     setPlan((current) => ({ ...current, timeZone: getBrowserTimeZone() }));
-    const inviteCode = window.location.pathname.match(/^\/join\/([^/]+)/)?.[1] ?? new URLSearchParams(window.location.search).get("invite");
+    const routeMatch = window.location.pathname.match(/^\/(join|status|final)\/([^/]+)/);
+    const inviteCode = routeMatch?.[2] ?? new URLSearchParams(window.location.search).get("invite");
     if (inviteCode) {
-      void loadPlan(inviteCode);
+      const routeScreen = routeMatch?.[1] === "status" ? "status" : routeMatch?.[1] === "final" ? "final" : "join";
+      void loadPlan(inviteCode, routeScreen);
     }
   }, []);
 
-  async function loadPlan(inviteCode: string) {
+  useEffect(() => {
+    if (plan.inviteCode === "NEW" || !["status", "vote", "final"].includes(screen)) return;
+    const interval = window.setInterval(() => {
+      void loadPlan(plan.inviteCode, screen, true);
+    }, 8000);
+    return () => window.clearInterval(interval);
+  }, [plan.inviteCode, screen]);
+
+  async function loadPlan(inviteCode: string, nextScreen: Screen = "join", quiet = false) {
     try {
       const bundle = await apiRequest<PlanBundle>(`/api/plans/${inviteCode}`);
       applyPlanBundle(bundle);
-      setScreen("join");
-      setNotice("Plan loaded from Supabase.");
+      setScreen(nextScreen);
+      if (!quiet) setNotice("Plan loaded from Supabase.");
     } catch (error) {
-      setNotice(apiFallbackMessage(error, "Could not load this invite from Supabase."));
+      if (!quiet) setNotice(apiFallbackMessage(error, "Could not load this invite from Supabase."));
     }
   }
 
@@ -169,12 +179,16 @@ export function ActuallyFreeApp() {
     };
 
     try {
-      const response = await apiRequest<{ participant: Participant }>(`/api/plans/${plan.inviteCode}/participants`, {
+      const response = await apiRequest<{ participant: Participant; bundle?: PlanBundle }>(`/api/plans/${plan.inviteCode}/participants`, {
         method: "POST",
         body: JSON.stringify(nextParticipant)
       });
-      const participant = normalizeParticipant(response.participant);
-      setParticipants((current) => [...current.filter((item) => item.id !== participant.id), participant]);
+      if (response.bundle) {
+        applyPlanBundle(response.bundle);
+      } else {
+        const participant = normalizeParticipant(response.participant);
+        setParticipants((current) => [...current.filter((item) => item.id !== participant.id), participant]);
+      }
       setNotice("Response saved to Supabase.");
     } catch (error) {
       setParticipants((current) => [...current.filter((participant) => participant.id !== id), nextParticipant]);
@@ -232,6 +246,24 @@ export function ActuallyFreeApp() {
     URL.revokeObjectURL(url);
   }
 
+  async function updatePlanStatus(status: Plan["status"]) {
+    if (plan.inviteCode === "NEW") {
+      setPlan((current) => ({ ...current, status }));
+      return;
+    }
+
+    try {
+      const bundle = await apiRequest<PlanBundle>(`/api/plans/${plan.inviteCode}/status`, {
+        method: "PUT",
+        body: JSON.stringify({ status })
+      });
+      applyPlanBundle(bundle);
+      setNotice(`Plan status set to ${status}.`);
+    } catch (error) {
+      setNotice(apiFallbackMessage(error, "Plan status was not saved."));
+    }
+  }
+
   return (
     <main className="screen-shell">
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-5 sm:px-6 lg:px-8">
@@ -267,6 +299,7 @@ export function ActuallyFreeApp() {
             rankedTimes={rankedTimes}
             rankedVenues={rankedVenues}
             votes={votes}
+            updateStatus={updatePlanStatus}
             onInvite={() => setScreen("invite")}
             onVote={() => setScreen("vote")}
           />
@@ -424,6 +457,8 @@ function InvitePage({
 }) {
   const shareText = `${plan.title}\n${titleCase(plan.activityType)} · ${formatDateRange(plan.startDate, plan.endDate)}\n${plan.area} · under $${plan.budgetMax}\n\nHelp pick the time and place: ${inviteUrl}`;
   const encodedShareText = encodeURIComponent(shareText);
+  const statusUrl = inviteUrl.replace("/join/", "/status/");
+  const finalUrl = inviteUrl.replace("/join/", "/final/");
 
   return (
     <section className="mx-auto w-full max-w-2xl rounded-lg bg-white/94 p-5 shadow-soft">
@@ -480,6 +515,14 @@ function InvitePage({
         <button onClick={onStatus} className="rounded-md border border-ink/15 px-4 py-3 font-black text-ink">
           View group status
         </button>
+      </div>
+      <div className="mt-5 grid gap-2 rounded-lg bg-paper p-4 text-sm font-bold text-ink/70">
+        <a href={statusUrl} target="_blank" rel="noreferrer" className="break-all text-lake underline underline-offset-4">
+          Public status: {statusUrl}
+        </a>
+        <a href={finalUrl} target="_blank" rel="noreferrer" className="break-all text-lake underline underline-offset-4">
+          Final page: {finalUrl}
+        </a>
       </div>
     </section>
   );
@@ -569,6 +612,7 @@ function StatusPage({
   rankedTimes,
   rankedVenues,
   votes,
+  updateStatus,
   onInvite,
   onVote
 }: {
@@ -578,6 +622,7 @@ function StatusPage({
   rankedTimes: RankedTime[];
   rankedVenues: RankedVenue[];
   votes: Vote[];
+  updateStatus: (status: Plan["status"]) => void;
   onInvite: () => void;
   onVote: () => void;
 }) {
@@ -624,6 +669,14 @@ function StatusPage({
         <button onClick={onVote} className="mt-6 w-full rounded-md bg-saffron px-4 py-4 font-black text-ink">
           Choose a place
         </button>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button onClick={() => updateStatus("voting")} className="rounded-md border border-white/25 px-3 py-2 text-sm font-black text-white">
+            Open voting
+          </button>
+          <button onClick={() => updateStatus("collecting")} className="rounded-md border border-white/25 px-3 py-2 text-sm font-black text-white">
+            Reopen responses
+          </button>
+        </div>
       </div>
       </div>
       <div className="rounded-lg bg-white/94 p-5 shadow-soft">

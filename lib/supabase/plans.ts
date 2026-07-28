@@ -1,4 +1,5 @@
-import { suggestVenuesForPlan } from "@/lib/venue-suggestions";
+import { estimateGoogleTravelTimes } from "@/lib/google-maps";
+import { getVenueSuggestionsForPlan } from "@/lib/venue-suggestions";
 import type { Database } from "@/lib/database.types";
 import type { ActivityType, Participant, Plan, TimeSlot, VoteValue } from "@/lib/planning";
 import { mapParticipant, mapPlan, mapVenue, mapVote, toAvailabilityRows, toDate, toTime, toVenueInsert } from "@/lib/supabase/mappers";
@@ -49,9 +50,10 @@ export async function createPlanRecord(
 
   if (planError) throw planError;
 
+  const suggestedVenues = await getVenueSuggestionsForPlan(mapPlan(planRow));
   const { data: venueRows, error: venueError } = await supabase
     .from("venues")
-    .insert(suggestVenuesForPlan(mapPlan(planRow)).map((venue) => toVenueInsert(planRow.id, venue)))
+    .insert(suggestedVenues.map((venue) => toVenueInsert(planRow.id, venue)))
     .select();
 
   if (venueError) throw venueError;
@@ -140,6 +142,29 @@ export async function addParticipantRecord(
   return mapParticipant(participantRow, availabilityRows.map((row) => ({ ...row, id: "", created_at: "" })));
 }
 
+export async function refreshTravelTimesForPlan(supabase: SupabaseClient, inviteCode: string): Promise<PlanBundle | null> {
+  const bundle = await getPlanBundleByInviteCode(supabase, inviteCode);
+  if (!bundle || !bundle.participants.length || !bundle.venues.length) return bundle;
+
+  const travelTimes = await estimateGoogleTravelTimes(bundle.participants, bundle.venues, bundle.plan);
+  if (!travelTimes) return bundle;
+
+  await Promise.all(
+    bundle.venues.map((venue) =>
+      supabase
+        .from("venues")
+        .update({
+          travel_times: travelTimes[venue.id] ?? venue.travelTimes,
+          average_travel_minutes: averageMinutes(travelTimes[venue.id]),
+          worst_travel_minutes: worstMinutes(travelTimes[venue.id])
+        })
+        .eq("id", venue.id)
+    )
+  );
+
+  return getPlanBundleByInviteCode(supabase, inviteCode);
+}
+
 export async function upsertVoteRecord(
   supabase: SupabaseClient,
   input: {
@@ -196,10 +221,34 @@ export async function confirmFinalPlanRecord(
   return { ok: true };
 }
 
+export async function updatePlanStatusRecord(
+  supabase: SupabaseClient,
+  inviteCode: string,
+  status: "collecting" | "voting" | "confirmed" | "cancelled"
+) {
+  const bundle = await getPlanBundleByInviteCode(supabase, inviteCode);
+  if (!bundle) throw new Error("Plan not found.");
+
+  const { error } = await supabase.from("plans").update({ status }).eq("id", bundle.plan.id);
+  if (error) throw error;
+
+  return getPlanBundleByInviteCode(supabase, inviteCode);
+}
+
 function resolveVenueId(venues: PlanBundle["venues"], selectedVenueId: string): string | null {
   const exactVenue = venues.find((venue) => venue.id === selectedVenueId || venue.externalPlaceId === selectedVenueId);
   if (exactVenue) return exactVenue.id;
 
   const suggestedIndex = selectedVenueId.match(/^suggested-(\d+)$/)?.[1];
   return suggestedIndex ? venues[Number(suggestedIndex) - 1]?.id ?? null : null;
+}
+
+function averageMinutes(times?: Record<string, number>): number | null {
+  const values = Object.values(times ?? {});
+  return values.length ? Math.round(values.reduce((total, value) => total + value, 0) / values.length) : null;
+}
+
+function worstMinutes(times?: Record<string, number>): number | null {
+  const values = Object.values(times ?? {});
+  return values.length ? Math.max(...values) : null;
 }

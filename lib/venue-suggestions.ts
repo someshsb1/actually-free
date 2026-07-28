@@ -1,4 +1,5 @@
 import type { ActivityType, Plan, Venue } from "@/lib/planning";
+import { findGoogleVenues } from "@/lib/google-maps";
 
 type VenueSeedInput = Pick<Plan, "activityType" | "budgetMax" | "city" | "area" | "maxTravelMinutes">;
 
@@ -54,6 +55,11 @@ export function suggestVenuesForPlan(plan: VenueSeedInput): Venue[] {
       why: `A ${category.toLowerCase()} search centered on ${area}, ${city}, ranked for a fair group trip and the stated budget.`
     };
   });
+}
+
+export async function getVenueSuggestionsForPlan(plan: Plan): Promise<Venue[]> {
+  const googleVenues = await findGoogleVenues(plan);
+  return googleVenues?.length ? googleVenues.slice(0, 3) : suggestVenuesForPlan(plan);
 }
 
 function cleanLocation(value: string, fallback: string): string {
