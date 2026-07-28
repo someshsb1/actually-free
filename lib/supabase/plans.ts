@@ -1,4 +1,4 @@
-import { demoVenues } from "@/lib/demo-venues";
+import { suggestVenuesForPlan } from "@/lib/venue-suggestions";
 import type { Database } from "@/lib/database.types";
 import type { ActivityType, Participant, Plan, TimeSlot, VoteValue } from "@/lib/planning";
 import { mapParticipant, mapPlan, mapVenue, mapVote, toAvailabilityRows, toDate, toTime, toVenueInsert } from "@/lib/supabase/mappers";
@@ -51,7 +51,7 @@ export async function createPlanRecord(
 
   const { data: venueRows, error: venueError } = await supabase
     .from("venues")
-    .insert(demoVenues.map((venue) => toVenueInsert(planRow.id, venue)))
+    .insert(suggestVenuesForPlan(mapPlan(planRow)).map((venue) => toVenueInsert(planRow.id, venue)))
     .select();
 
   if (venueError) throw venueError;
@@ -200,7 +200,6 @@ function resolveVenueId(venues: PlanBundle["venues"], selectedVenueId: string): 
   const exactVenue = venues.find((venue) => venue.id === selectedVenueId || venue.externalPlaceId === selectedVenueId);
   if (exactVenue) return exactVenue.id;
 
-  const demoVenue = demoVenues.find((venue) => venue.id === selectedVenueId);
-  const matchingStoredVenue = demoVenue ? venues.find((venue) => venue.name === demoVenue.name) : null;
-  return matchingStoredVenue?.id ?? null;
+  const suggestedIndex = selectedVenueId.match(/^suggested-(\d+)$/)?.[1];
+  return suggestedIndex ? venues[Number(suggestedIndex) - 1]?.id ?? null : null;
 }

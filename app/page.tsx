@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { demoVenues } from "@/lib/demo-venues";
+import { suggestVenuesForPlan } from "@/lib/venue-suggestions";
 import {
   ActivityType,
   Participant,
@@ -26,7 +26,7 @@ type Screen = "landing" | "create" | "invite" | "join" | "status" | "vote" | "fi
 type PlanBundle = {
   plan: Plan;
   participants: Participant[];
-  venues: typeof demoVenues;
+  venues: ReturnType<typeof suggestVenuesForPlan>;
   votes: Vote[];
 };
 
@@ -59,7 +59,7 @@ export function ActuallyFreeApp() {
   const [screen, setScreen] = useState<Screen>("landing");
   const [plan, setPlan] = useState<Plan>(initialPlan);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [planVenues, setPlanVenues] = useState(demoVenues);
+  const [planVenues, setPlanVenues] = useState(() => suggestVenuesForPlan(initialPlan));
   const [votes, setVotes] = useState<Vote[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState("tacombi");
   const [confirmed, setConfirmed] = useState(false);
@@ -142,7 +142,7 @@ export function ActuallyFreeApp() {
       setNotice("Plan saved to Supabase.");
     } catch (error) {
       setPlan(nextPlan);
-      setPlanVenues(demoVenues);
+      setPlanVenues(suggestVenuesForPlan(nextPlan));
       setNotice(apiFallbackMessage(error, "Plan was not saved to Supabase; it is only in this browser session."));
     }
     setParticipants([]);
@@ -400,7 +400,7 @@ function CreatePlanForm({ plan, onSubmit }: { plan: Plan; onSubmit: (event: Form
           <input name="area" defaultValue={plan.area} placeholder="Manhattan, Bandra, Indiranagar" className="field" required />
         </Field>
         <Field label="City or region">
-          <input name="city" defaultValue={plan.city} placeholder="New York, Mumbai, Bengaluru" className="field" required />
+          <input name="city" defaultValue={plan.city} placeholder="Boston, Mumbai, Bengaluru" className="field" required />
         </Field>
         <Field label="Plan timezone">
           <input name="timeZone" defaultValue={plan.timeZone} className="field" required />

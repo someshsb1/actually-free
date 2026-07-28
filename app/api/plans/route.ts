@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       endDate: String(body.endDate),
       budgetMax: Number(body.budgetMax),
       city: String(body.city || ""),
-      area: String(body.area || "New York City"),
+      area: String(body.area || "Preferred area"),
       maxTravelMinutes: Number(body.maxTravelMinutes),
       organizerName: String(body.organizerName || "Organizer"),
       timeZone: String(body.timeZone || "UTC")
