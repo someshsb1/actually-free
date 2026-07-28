@@ -1,4 +1,3 @@
-import { estimateGoogleTravelTimes } from "@/lib/google-maps";
 import { getVenueSuggestionsForPlan } from "@/lib/venue-suggestions";
 import type { Database } from "@/lib/database.types";
 import type { ActivityType, Participant, Plan, TimeSlot, VoteValue } from "@/lib/planning";
@@ -50,7 +49,7 @@ export async function createPlanRecord(
 
   if (planError) throw planError;
 
-  const suggestedVenues = await getVenueSuggestionsForPlan(mapPlan(planRow));
+  const suggestedVenues = getVenueSuggestionsForPlan(mapPlan(planRow));
   const { data: venueRows, error: venueError } = await supabase
     .from("venues")
     .insert(suggestedVenues.map((venue) => toVenueInsert(planRow.id, venue)))
@@ -145,9 +144,7 @@ export async function addParticipantRecord(
 export async function refreshTravelTimesForPlan(supabase: SupabaseClient, inviteCode: string): Promise<PlanBundle | null> {
   const bundle = await getPlanBundleByInviteCode(supabase, inviteCode);
   if (!bundle || !bundle.participants.length || !bundle.venues.length) return bundle;
-
-  const travelTimes = await estimateGoogleTravelTimes(bundle.participants, bundle.venues, bundle.plan);
-  if (!travelTimes) return bundle;
+  const travelTimes = estimateNoCostTravelTimes(bundle.participants, bundle.venues, bundle.plan.maxTravelMinutes);
 
   await Promise.all(
     bundle.venues.map((venue) =>
@@ -251,4 +248,20 @@ function averageMinutes(times?: Record<string, number>): number | null {
 function worstMinutes(times?: Record<string, number>): number | null {
   const values = Object.values(times ?? {});
   return values.length ? Math.max(...values) : null;
+}
+
+function estimateNoCostTravelTimes(participants: Participant[], venues: PlanBundle["venues"], maxTravelMinutes: number) {
+  return venues.reduce<Record<string, Record<string, number>>>((byVenue, venue, venueIndex) => {
+    byVenue[venue.id] = participants.reduce<Record<string, number>>((times, participant, participantIndex) => {
+      const seed = stableHash(`${participant.startingLocation}-${venue.address}-${venueIndex}`);
+      const spread = Math.max(8, Math.round(maxTravelMinutes * 0.45));
+      times[participant.id] = Math.max(8, Math.min(maxTravelMinutes + 12, Math.round(maxTravelMinutes * 0.55) + (seed % spread)));
+      return times;
+    }, {});
+    return byVenue;
+  }, {});
+}
+
+function stableHash(value: string): number {
+  return value.split("").reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 0);
 }

@@ -1,5 +1,4 @@
 import type { ActivityType, Plan, Venue } from "@/lib/planning";
-import { findGoogleVenues } from "@/lib/google-maps";
 
 type VenueSeedInput = Pick<Plan, "activityType" | "budgetMax" | "city" | "area" | "maxTravelMinutes">;
 
@@ -57,9 +56,8 @@ export function suggestVenuesForPlan(plan: VenueSeedInput): Venue[] {
   });
 }
 
-export async function getVenueSuggestionsForPlan(plan: Plan): Promise<Venue[]> {
-  const googleVenues = await findGoogleVenues(plan);
-  return googleVenues?.length ? googleVenues.slice(0, 3) : suggestVenuesForPlan(plan);
+export function getVenueSuggestionsForPlan(plan: Plan): Venue[] {
+  return suggestVenuesForPlan(plan);
 }
 
 function cleanLocation(value: string, fallback: string): string {

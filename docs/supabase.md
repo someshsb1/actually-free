@@ -46,7 +46,6 @@ Expected environment variables for that next step:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-GOOGLE_MAPS_API_KEY=
 ```
 
 ## Vercel Environment Variables
@@ -68,7 +67,7 @@ In Vercel:
 
 Keep `SUPABASE_SERVICE_ROLE_KEY` server-only. Do not prefix it with `NEXT_PUBLIC_`.
 
-`GOOGLE_MAPS_API_KEY` is optional. When present, the server uses Google Places Text Search for real venue candidates and Google Distance Matrix for travel estimates. Without it, the app falls back to local placeholder recommendations based on the plan city and area.
+The app intentionally uses no paid third-party APIs. Venue recommendations are no-cost, city-aware placeholders that link to public map searches.
 
 ## Backend Routes
 
