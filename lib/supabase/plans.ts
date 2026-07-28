@@ -23,6 +23,7 @@ export async function createPlanRecord(
     area: string;
     maxTravelMinutes: number;
     organizerName: string;
+    timeZone: string;
   }
 ): Promise<PlanBundle> {
   const inviteCode = `AF-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -34,6 +35,7 @@ export async function createPlanRecord(
       start_date: input.startDate,
       end_date: input.endDate,
       budget_max: input.budgetMax,
+      time_zone: input.timeZone,
       preferred_area: input.area,
       organizer_name: input.organizerName,
       max_travel_minutes: input.maxTravelMinutes,
@@ -127,7 +129,7 @@ export async function addParticipantRecord(
 
   if (participantError) throw participantError;
 
-  const availabilityRows = toAvailabilityRows(participantRow.id, input.availability);
+  const availabilityRows = toAvailabilityRows(participantRow.id, input.availability, bundle.plan.timeZone);
   if (availabilityRows.length) {
     const { error: availabilityError } = await supabase.from("availability").insert(availabilityRows);
     if (availabilityError) throw availabilityError;
@@ -178,9 +180,9 @@ export async function confirmFinalPlanRecord(
   const { error: finalError } = await supabase.from("final_plans").upsert({
     plan_id: bundle.plan.id,
     venue_id: venueId,
-    final_date: toDate(input.slot.start),
-    final_start_time: toTime(input.slot.start),
-    final_end_time: toTime(input.slot.end),
+    final_date: toDate(input.slot.start, bundle.plan.timeZone),
+    final_start_time: toTime(input.slot.start, bundle.plan.timeZone),
+    final_end_time: toTime(input.slot.end, bundle.plan.timeZone),
     confirmed_by: input.confirmedBy
   });
 

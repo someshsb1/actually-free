@@ -15,7 +15,7 @@ import {
   calculateVoteTotals,
   formatDateRange,
   formatSlot,
-  makeDateTime,
+  getBrowserTimeZone,
   rankAvailability,
   scoreVenues
 } from "@/lib/planning";
@@ -33,67 +33,22 @@ const activityOptions: ActivityType[] = ["dinner", "brunch", "drinks", "coffee",
 const dietaryOptions = ["vegetarian", "vegan", "gluten-free", "halal", "no pork"];
 
 const initialPlan: Plan = {
-  id: "plan-birthday-dinner",
-  title: "Birthday dinner",
+  id: "new-plan",
+  title: "",
   activityType: "dinner",
   startDate: "2026-08-07",
   endDate: "2026-08-09",
   budgetMax: 50,
-  city: "New York City",
-  area: "Manhattan or Queens",
+  city: "",
+  timeZone: "UTC",
+  area: "",
   maxTravelMinutes: 40,
-  organizerName: "Maya",
-  inviteCode: "AF-7829",
+  organizerName: "",
+  inviteCode: "NEW",
   preferredDate: "2026-08-08",
   status: "collecting",
   createdAt: new Date().toISOString()
 };
-
-const seededParticipants: Participant[] = [
-  {
-    id: "maya",
-    name: "Maya",
-    startingLocation: "Astoria",
-    budgetMax: 50,
-    dietaryPreferences: ["vegetarian"],
-    availability: [
-      { start: makeDateTime("2026-08-08", "18:30"), end: makeDateTime("2026-08-08", "21:30") },
-      { start: makeDateTime("2026-08-09", "17:30"), end: makeDateTime("2026-08-09", "20:30") }
-    ]
-  },
-  {
-    id: "jordan",
-    name: "Jordan",
-    startingLocation: "Long Island City",
-    budgetMax: 45,
-    dietaryPreferences: [],
-    availability: [
-      { start: makeDateTime("2026-08-08", "19:00"), end: makeDateTime("2026-08-08", "22:00") },
-      { start: makeDateTime("2026-08-07", "20:00"), end: makeDateTime("2026-08-07", "22:00") }
-    ]
-  },
-  {
-    id: "alex",
-    name: "Alex",
-    startingLocation: "Chelsea",
-    budgetMax: 55,
-    dietaryPreferences: ["gluten-free"],
-    availability: [
-      { start: makeDateTime("2026-08-08", "18:00"), end: makeDateTime("2026-08-08", "21:30") },
-      { start: makeDateTime("2026-08-09", "18:30"), end: makeDateTime("2026-08-09", "21:00") }
-    ]
-  }
-];
-
-const expectedGuests = ["Maya", "Jordan", "Alex", "Sam", "Priya"];
-
-const seededVotes: Vote[] = [
-  { participantId: "maya", venueId: "tacombi", vote: "first" },
-  { participantId: "maya", venueId: "namkeen", vote: "acceptable" },
-  { participantId: "jordan", venueId: "tacombi", vote: "acceptable" },
-  { participantId: "jordan", venueId: "rubirosa", vote: "first" },
-  { participantId: "alex", venueId: "tacombi", vote: "first" }
-];
 
 export default function Home() {
   return <ActuallyFreeApp />;
@@ -102,17 +57,17 @@ export default function Home() {
 export function ActuallyFreeApp() {
   const [screen, setScreen] = useState<Screen>("landing");
   const [plan, setPlan] = useState<Plan>(initialPlan);
-  const [participants, setParticipants] = useState<Participant[]>(seededParticipants);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [planVenues, setPlanVenues] = useState(demoVenues);
-  const [votes, setVotes] = useState<Vote[]>(seededVotes);
+  const [votes, setVotes] = useState<Vote[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState("tacombi");
   const [confirmed, setConfirmed] = useState(false);
   const [notice, setNotice] = useState("Ready to create a plan.");
-  const [joinName, setJoinName] = useState("Priya");
-  const [joinLocation, setJoinLocation] = useState("Sunnyside");
+  const [joinName, setJoinName] = useState("");
+  const [joinLocation, setJoinLocation] = useState("");
   const [joinBudget, setJoinBudget] = useState(50);
-  const [joinDietary, setJoinDietary] = useState<string[]>(["vegetarian"]);
-  const [joinAvailability, setJoinAvailability] = useState(["2026-08-08T19:00"]);
+  const [joinDietary, setJoinDietary] = useState<string[]>([]);
+  const [joinAvailability, setJoinAvailability] = useState<string[]>([]);
 
   const rankedTimes = useMemo(() => rankAvailability(plan, participants), [plan, participants]);
   const bestTime = rankedTimes[0];
@@ -126,6 +81,7 @@ export function ActuallyFreeApp() {
     typeof window === "undefined" ? `/join/${plan.inviteCode}` : `${window.location.origin}/join/${plan.inviteCode}`;
 
   useEffect(() => {
+    setPlan((current) => ({ ...current, timeZone: getBrowserTimeZone() }));
     const inviteCode = window.location.pathname.match(/^\/join\/([^/]+)/)?.[1] ?? new URLSearchParams(window.location.search).get("invite");
     if (inviteCode) {
       void loadPlan(inviteCode);
@@ -166,6 +122,7 @@ export function ActuallyFreeApp() {
       endDate: String(form.get("endDate")),
       budgetMax: Number(form.get("budgetMax")),
       city: "New York City",
+      timeZone: String(form.get("timeZone") || getBrowserTimeZone()),
       area: String(form.get("area")),
       maxTravelMinutes: Number(form.get("maxTravelMinutes")),
       organizerName: String(form.get("organizerName") || "Organizer"),
@@ -399,10 +356,10 @@ function CreatePlanForm({ plan, onSubmit }: { plan: Plan; onSubmit: (event: Form
       <ScreenTitle eyebrow="Create your plan" title="What are you planning?" />
       <form onSubmit={onSubmit} className="mt-5 grid gap-4">
         <Field label="Plan name">
-          <input name="title" defaultValue={plan.title} className="field" />
+          <input name="title" defaultValue={plan.title} placeholder="Birthday dinner" className="field" required />
         </Field>
         <Field label="Organizer">
-          <input name="organizerName" defaultValue={plan.organizerName} className="field" />
+          <input name="organizerName" defaultValue={plan.organizerName} placeholder="Your name" className="field" required />
         </Field>
         <Field label="Activity">
           <select name="activityType" defaultValue={plan.activityType} className="field">
@@ -430,7 +387,10 @@ function CreatePlanForm({ plan, onSubmit }: { plan: Plan; onSubmit: (event: Form
           </Field>
         </div>
         <Field label="Preferred area">
-          <input name="area" defaultValue={plan.area} className="field" />
+          <input name="area" defaultValue={plan.area} placeholder="Manhattan, Bandra, Indiranagar" className="field" required />
+        </Field>
+        <Field label="Plan timezone">
+          <input name="timeZone" defaultValue={plan.timeZone} className="field" required />
         </Field>
         <button className="rounded-md bg-ink px-4 py-4 font-black text-white">Create invite</button>
       </form>
@@ -501,17 +461,23 @@ function JoinForm(props: {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { plan, joinDietary, setJoinDietary, joinAvailability, setJoinAvailability } = props;
-  const dateChoices = ["2026-08-07T20:00", "2026-08-08T18:30", "2026-08-08T19:00", "2026-08-09T18:00"];
+  const dateChoices = buildAvailabilityChoices(plan.startDate, plan.endDate);
 
   return (
     <section className="mx-auto w-full max-w-2xl rounded-lg bg-white/94 p-5 shadow-soft">
       <ScreenTitle eyebrow="No account needed" title={`Join ${plan.title}`} />
       <form onSubmit={props.onSubmit} className="mt-5 grid gap-4">
         <Field label="Name">
-          <input value={props.joinName} onChange={(event) => props.setJoinName(event.target.value)} className="field" />
+          <input value={props.joinName} onChange={(event) => props.setJoinName(event.target.value)} placeholder="Your name" className="field" required />
         </Field>
         <Field label="Starting ZIP or neighborhood">
-          <input value={props.joinLocation} onChange={(event) => props.setJoinLocation(event.target.value)} className="field" />
+          <input
+            value={props.joinLocation}
+            onChange={(event) => props.setJoinLocation(event.target.value)}
+            placeholder="Neighborhood or ZIP"
+            className="field"
+            required
+          />
         </Field>
         <Field label="Budget preference">
           <input
@@ -553,21 +519,21 @@ function StatusPage({
   onInvite: () => void;
   onVote: () => void;
 }) {
-  const responded = new Set(participants.map((participant) => participant.name));
-
   return (
     <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
       <div className="rounded-lg bg-white/94 p-5 shadow-soft">
-        <ScreenTitle eyebrow={`${participants.length} of ${expectedGuests.length} people responded`} title={plan.title} />
+        <ScreenTitle eyebrow={`${participants.length} ${participants.length === 1 ? "person has" : "people have"} responded`} title={plan.title} />
         <div className="mt-5 grid gap-2">
-          {expectedGuests.map((name) => (
-            <div key={name} className="flex items-center justify-between rounded-md border border-ink/10 px-3 py-3">
-              <span className="font-bold">{name}</span>
-              <span className={responded.has(name) ? "font-black text-moss" : "font-black text-ink/35"}>
-                {responded.has(name) ? "Responded" : "Waiting"}
-              </span>
-            </div>
-          ))}
+          {participants.length ? (
+            participants.map((participant) => (
+              <div key={participant.id} className="flex items-center justify-between rounded-md border border-ink/10 px-3 py-3">
+                <span className="font-bold">{participant.name}</span>
+                <span className="font-black text-moss">Responded</span>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-md border border-ink/10 px-3 py-3 font-bold text-ink/55">No responses yet</div>
+          )}
         </div>
         <button onClick={onInvite} className="mt-4 w-full rounded-md border border-ink/15 px-4 py-3 font-black text-ink">
           Copy invite link
@@ -787,6 +753,20 @@ function titleCase(value: string): string {
 function formatSlotLabel(value: string): string {
   const start = new Date(value);
   return formatSlot({ start, end: new Date(start.getTime() + 150 * 60 * 1000) });
+}
+
+function buildAvailabilityChoices(startDate: string, endDate: string): string[] {
+  const choices: string[] = [];
+  const cursor = new Date(`${startDate}T12:00:00`);
+  const last = new Date(`${endDate}T12:00:00`);
+
+  while (cursor <= last && choices.length < 12) {
+    const date = cursor.toISOString().slice(0, 10);
+    choices.push(`${date}T18:00`, `${date}T19:00`, `${date}T20:00`);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return choices;
 }
 
 async function apiRequest<T = unknown>(path: string, init?: RequestInit): Promise<T> {

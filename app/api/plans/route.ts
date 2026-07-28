@@ -14,7 +14,8 @@ export async function POST(request: Request) {
       budgetMax: Number(body.budgetMax),
       area: String(body.area || "New York City"),
       maxTravelMinutes: Number(body.maxTravelMinutes),
-      organizerName: String(body.organizerName || "Organizer")
+      organizerName: String(body.organizerName || "Organizer"),
+      timeZone: String(body.timeZone || "UTC")
     });
 
     return NextResponse.json(bundle);

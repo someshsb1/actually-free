@@ -13,6 +13,7 @@ export type Plan = {
   endDate: string;
   budgetMax: number;
   city: string;
+  timeZone: string;
   area: string;
   maxTravelMinutes: number;
   organizerName: string;
@@ -81,6 +82,10 @@ export function overlaps(a: TimeSlot, b: TimeSlot): boolean {
 
 export function makeDateTime(date: string, time: string): Date {
   return new Date(`${date}T${time}:00`);
+}
+
+export function getBrowserTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
 
 export function formatDateRange(startDate: string, endDate: string): string {

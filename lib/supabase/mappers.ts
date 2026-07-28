@@ -19,6 +19,7 @@ export function mapPlan(row: PlanRow): Plan {
     endDate: row.end_date,
     budgetMax: row.budget_max,
     city: row.city,
+    timeZone: row.time_zone,
     area: row.preferred_area,
     maxTravelMinutes: row.max_travel_minutes,
     organizerName: row.organizer_name,
@@ -71,12 +72,12 @@ export function mapVote(row: VoteRow): Vote {
   };
 }
 
-export function toAvailabilityRows(participantId: string, availability: TimeSlot[]) {
+export function toAvailabilityRows(participantId: string, availability: TimeSlot[], timeZone: string) {
   return availability.map((slot) => ({
     participant_id: participantId,
-    date: toDate(slot.start),
-    start_time: toTime(slot.start),
-    end_time: toTime(slot.end)
+    date: toDate(slot.start, timeZone),
+    start_time: toTime(slot.start, timeZone),
+    end_time: toTime(slot.end, timeZone)
   }));
 }
 
@@ -98,18 +99,18 @@ export function toVenueInsert(planId: string, venue: Venue) {
   };
 }
 
-export function toDate(date: Date): string {
+export function toDate(date: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York",
+    timeZone: normalizeTimeZone(timeZone),
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
   }).format(date);
 }
 
-export function toTime(date: Date): string {
+export function toTime(date: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
+    timeZone: normalizeTimeZone(timeZone),
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -121,4 +122,13 @@ export function toTime(date: Date): string {
 
 function isTravelTimes(value: Json): value is Record<string, number> {
   return Boolean(value) && !Array.isArray(value) && typeof value === "object";
+}
+
+function normalizeTimeZone(timeZone: string): string {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone });
+    return timeZone;
+  } catch {
+    return "UTC";
+  }
 }

@@ -17,6 +17,7 @@ export type Database = {
           end_date: string;
           budget_max: number;
           city: string;
+          time_zone: string;
           preferred_area: string;
           organizer_name: string;
           invite_code: string;
@@ -34,6 +35,7 @@ export type Database = {
           end_date: string;
           budget_max: number;
           city?: string;
+          time_zone?: string;
           preferred_area: string;
           organizer_name: string;
           invite_code?: string;
