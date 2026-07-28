@@ -16,7 +16,9 @@ export async function POST(request: Request) {
       area: String(body.area || "Preferred area"),
       maxTravelMinutes: Number(body.maxTravelMinutes),
       organizerName: String(body.organizerName || "Organizer"),
-      timeZone: String(body.timeZone || "UTC")
+      timeZone: String(body.timeZone || "UTC"),
+      expectedGuestCount: Number(body.expectedGuestCount || 0),
+      responseDeadline: body.responseDeadline ? String(body.responseDeadline) : null
     });
 
     return NextResponse.json(bundle);

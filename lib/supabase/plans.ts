@@ -25,6 +25,8 @@ export async function createPlanRecord(
     maxTravelMinutes: number;
     organizerName: string;
     timeZone: string;
+    expectedGuestCount: number;
+    responseDeadline: string | null;
   }
 ): Promise<PlanBundle> {
   const inviteCode = `AF-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -42,6 +44,8 @@ export async function createPlanRecord(
       organizer_name: input.organizerName,
       max_travel_minutes: input.maxTravelMinutes,
       preferred_date: input.startDate,
+      expected_guest_count: input.expectedGuestCount,
+      response_deadline: input.responseDeadline,
       invite_code: inviteCode
     })
     .select()
@@ -112,21 +116,27 @@ export async function addParticipantRecord(
     startingLocation: string;
     budgetMax: number;
     dietaryPreferences: string[];
+    areaPreferences: string[];
+    responseToken?: string;
     availability: TimeSlot[];
   }
 ): Promise<Participant> {
   const bundle = await getPlanBundleByInviteCode(supabase, inviteCode);
   if (!bundle) throw new Error("Plan not found.");
 
-  const { data: participantRow, error: participantError } = await supabase
-    .from("participants")
-    .insert({
+  const responseToken = input.responseToken || crypto.randomUUID().replace(/-/g, "");
+  const participantPayload = {
       plan_id: bundle.plan.id,
       name: input.name,
       starting_location: input.startingLocation,
       budget_max: input.budgetMax,
-      dietary_preferences: input.dietaryPreferences
-    })
+      dietary_preferences: input.dietaryPreferences,
+      area_preferences: input.areaPreferences,
+      response_token: responseToken
+    };
+  const { data: participantRow, error: participantError } = await supabase
+    .from("participants")
+    .upsert(participantPayload, { onConflict: "response_token" })
     .select()
     .single();
 
@@ -139,6 +149,50 @@ export async function addParticipantRecord(
   }
 
   return mapParticipant(participantRow, availabilityRows.map((row) => ({ ...row, id: "", created_at: "" })));
+}
+
+export async function deleteParticipantRecord(supabase: SupabaseClient, participantId: string) {
+  const { error } = await supabase.from("participants").delete().eq("id", participantId);
+  if (error) throw error;
+  return { ok: true };
+}
+
+export async function addVenueCandidateRecord(
+  supabase: SupabaseClient,
+  inviteCode: string,
+  input: {
+    name: string;
+    address: string;
+    category: string;
+    pricePerPerson: number;
+    bookingUrl: string;
+  }
+) {
+  const bundle = await getPlanBundleByInviteCode(supabase, inviteCode);
+  if (!bundle) throw new Error("Plan not found.");
+
+  const { data, error } = await supabase
+    .from("venues")
+    .insert({
+      plan_id: bundle.plan.id,
+      external_place_id: `manual-${crypto.randomUUID()}`,
+      name: input.name,
+      address: input.address,
+      category: input.category,
+      price_level: input.pricePerPerson > 60 ? 3 : input.pricePerPerson > 25 ? 2 : 1,
+      price_per_person: input.pricePerPerson,
+      rating: 4.2,
+      booking_url: input.bookingUrl,
+      dietary_tags: ["vegetarian"],
+      travel_times: {},
+      booking_confidence: 0.9,
+      why_it_matches: "Organizer-added candidate."
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapVenue(data);
 }
 
 export async function refreshTravelTimesForPlan(supabase: SupabaseClient, inviteCode: string): Promise<PlanBundle | null> {

@@ -47,6 +47,8 @@ const initialPlan: Plan = {
   organizerName: "",
   inviteCode: "NEW",
   preferredDate: "2026-08-08",
+  expectedGuestCount: 0,
+  responseDeadline: null,
   status: "collecting",
   createdAt: new Date().toISOString()
 };
@@ -68,7 +70,9 @@ export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?:
   const [joinLocation, setJoinLocation] = useState("");
   const [joinBudget, setJoinBudget] = useState(50);
   const [joinDietary, setJoinDietary] = useState<string[]>([]);
+  const [joinAreas, setJoinAreas] = useState<string[]>([]);
   const [joinAvailability, setJoinAvailability] = useState<string[]>([]);
+  const [manualVenue, setManualVenue] = useState({ name: "", address: "", category: "", pricePerPerson: 40, bookingUrl: "" });
 
   const rankedTimes = useMemo(() => rankAvailability(plan, participants), [plan, participants]);
   const bestTime = rankedTimes[0];
@@ -139,6 +143,8 @@ export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?:
       organizerName: String(form.get("organizerName") || "Organizer"),
       inviteCode,
       preferredDate: startDate,
+      expectedGuestCount: Number(form.get("expectedGuestCount") || 0),
+      responseDeadline: String(form.get("responseDeadline") || "") || null,
       status: "collecting" as const,
       createdAt: new Date().toISOString()
     };
@@ -175,6 +181,8 @@ export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?:
       startingLocation: joinLocation,
       budgetMax: joinBudget,
       dietaryPreferences: joinDietary,
+      areaPreferences: joinAreas,
+      responseToken: getResponseToken(plan.inviteCode),
       availability
     };
 
@@ -187,6 +195,7 @@ export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?:
         applyPlanBundle(response.bundle);
       } else {
         const participant = normalizeParticipant(response.participant);
+        saveResponseToken(plan.inviteCode, participant.responseToken ?? nextParticipant.responseToken);
         setParticipants((current) => [...current.filter((item) => item.id !== participant.id), participant]);
       }
       setNotice("Response saved to Supabase.");
@@ -195,6 +204,47 @@ export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?:
       setNotice(apiFallbackMessage(error, "Response was not saved to Supabase; it is only in this browser session."));
     }
     setScreen("status");
+  }
+
+  async function addManualVenue(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      const bundle = await apiRequest<PlanBundle>(`/api/plans/${plan.inviteCode}/venues`, {
+        method: "POST",
+        body: JSON.stringify(manualVenue)
+      });
+      applyPlanBundle(bundle);
+      setManualVenue({ name: "", address: "", category: "", pricePerPerson: 40, bookingUrl: "" });
+      setNotice("Venue candidate added.");
+    } catch (error) {
+      const localVenue = {
+        id: `manual-${Date.now()}`,
+        externalPlaceId: `manual-${Date.now()}`,
+        name: manualVenue.name,
+        address: manualVenue.address,
+        category: manualVenue.category || "Manual pick",
+        pricePerPerson: manualVenue.pricePerPerson,
+        priceLevel: manualVenue.pricePerPerson > 60 ? "$$$" as const : manualVenue.pricePerPerson > 25 ? "$$" as const : "$" as const,
+        rating: 4.2,
+        bookingUrl: manualVenue.bookingUrl || `https://www.openstreetmap.org/search?query=${encodeURIComponent(manualVenue.address)}`,
+        dietaryTags: ["vegetarian"],
+        travelTimes: {},
+        bookingConfidence: 0.9,
+        why: "Organizer-added candidate."
+      };
+      setPlanVenues((current) => [localVenue, ...current].slice(0, 6));
+      setNotice(apiFallbackMessage(error, "Venue candidate was only added locally."));
+    }
+  }
+
+  async function removeParticipant(participantId: string) {
+    setParticipants((current) => current.filter((participant) => participant.id !== participantId));
+    try {
+      await apiRequest(`/api/participants/${participantId}`, { method: "DELETE" });
+      setNotice("Response removed.");
+    } catch (error) {
+      setNotice(apiFallbackMessage(error, "Response was removed locally only."));
+    }
   }
 
   async function setVote(participantId: string, venueId: string, vote: VoteValue) {
@@ -286,6 +336,8 @@ export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?:
             setJoinBudget={setJoinBudget}
             joinDietary={joinDietary}
             setJoinDietary={setJoinDietary}
+            joinAreas={joinAreas}
+            setJoinAreas={setJoinAreas}
             joinAvailability={joinAvailability}
             setJoinAvailability={setJoinAvailability}
             onSubmit={addParticipant}
@@ -300,6 +352,8 @@ export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?:
             rankedVenues={rankedVenues}
             votes={votes}
             updateStatus={updatePlanStatus}
+            removeParticipant={removeParticipant}
+            exportSummary={() => downloadTextExport(plan, participants, rankedTimes, rankedVenues, votes)}
             onInvite={() => setScreen("invite")}
             onVote={() => setScreen("vote")}
           />
@@ -311,6 +365,9 @@ export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?:
             rankedVenues={rankedVenues}
             votes={votes}
             voteTotals={voteTotals}
+            manualVenue={manualVenue}
+            setManualVenue={setManualVenue}
+            addManualVenue={addManualVenue}
             selectedVenueId={selectedVenueId}
             setSelectedVenueId={setSelectedVenueId}
             setVote={setVote}
@@ -425,8 +482,16 @@ function CreatePlanForm({ plan, onSubmit }: { plan: Plan; onSubmit: (event: Form
           <Field label="Budget per person">
             <input name="budgetMax" type="number" min="10" defaultValue={plan.budgetMax} className="field" />
           </Field>
-          <Field label="Maximum travel time">
+        <Field label="Maximum travel time">
             <input name="maxTravelMinutes" type="number" min="10" defaultValue={plan.maxTravelMinutes} className="field" />
+          </Field>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Expected guest count">
+            <input name="expectedGuestCount" type="number" min="0" defaultValue={plan.expectedGuestCount} className="field" />
+          </Field>
+          <Field label="Response deadline">
+            <input name="responseDeadline" type="datetime-local" className="field" />
           </Field>
         </div>
         <Field label="Preferred area">
@@ -538,11 +603,14 @@ function JoinForm(props: {
   setJoinBudget: (value: number) => void;
   joinDietary: string[];
   setJoinDietary: (value: string[]) => void;
+  joinAreas: string[];
+  setJoinAreas: (value: string[]) => void;
   joinAvailability: string[];
   setJoinAvailability: (value: string[]) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { plan, joinDietary, setJoinDietary, joinAvailability, setJoinAvailability } = props;
+  const areaOptions = buildAreaOptions(plan.area, plan.city);
   const dateChoices = buildAvailabilityChoices(plan.startDate, plan.endDate);
   const responseProgress =
     Number(Boolean(props.joinName.trim())) +
@@ -599,6 +667,12 @@ function JoinForm(props: {
           values={joinDietary}
           setValues={setJoinDietary}
         />
+        <ChoiceGroup
+          label="Areas that work"
+          options={areaOptions.map((value) => ({ value, label: value }))}
+          values={props.joinAreas}
+          setValues={props.setJoinAreas}
+        />
         <button className="rounded-md bg-ink px-4 py-4 font-black text-white">Submit availability</button>
       </form>
     </section>
@@ -613,6 +687,8 @@ function StatusPage({
   rankedVenues,
   votes,
   updateStatus,
+  removeParticipant,
+  exportSummary,
   onInvite,
   onVote
 }: {
@@ -623,6 +699,8 @@ function StatusPage({
   rankedVenues: RankedVenue[];
   votes: Vote[];
   updateStatus: (status: Plan["status"]) => void;
+  removeParticipant: (participantId: string) => void;
+  exportSummary: () => void;
   onInvite: () => void;
   onVote: () => void;
 }) {
@@ -634,7 +712,7 @@ function StatusPage({
       <div className="rounded-lg bg-white/94 p-5 shadow-soft">
         <ScreenTitle eyebrow="Plan pulse" title="The group is converging" />
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <PulseCard value={`${participants.length}`} label="friends responded" tone="lake" />
+          <PulseCard value={`${participants.length}/${plan.expectedGuestCount || "?"}`} label="friends responded" tone="lake" />
           <PulseCard value={`${perfectMatches}`} label="perfect time matches" tone="moss" />
           <PulseCard value={leadingVenue?.name ?? "No winner yet"} label="place currently leading" tone="tomato" />
         </div>
@@ -647,7 +725,12 @@ function StatusPage({
             participants.map((participant) => (
               <div key={participant.id} className="flex items-center justify-between rounded-md border border-ink/10 px-3 py-3">
                 <span className="font-bold">{participant.name}</span>
-                <span className="font-black text-moss">Responded</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-black text-moss">Responded</span>
+                  <button onClick={() => removeParticipant(participant.id)} className="rounded-md border border-ink/15 px-2 py-1 text-xs font-black text-ink/60">
+                    Remove
+                  </button>
+                </div>
               </div>
             ))
           ) : (
@@ -656,6 +739,9 @@ function StatusPage({
         </div>
         <button onClick={onInvite} className="mt-4 w-full rounded-md border border-ink/15 px-4 py-3 font-black text-ink">
           Share invite
+        </button>
+        <button onClick={exportSummary} className="mt-2 w-full rounded-md border border-ink/15 px-4 py-3 font-black text-ink">
+          Export summary
         </button>
       </div>
       <div className="rounded-lg bg-ink p-5 text-white shadow-soft">
@@ -701,6 +787,9 @@ function VotingPage(props: {
   rankedVenues: RankedVenue[];
   votes: Vote[];
   voteTotals: Record<string, number>;
+  manualVenue: { name: string; address: string; category: string; pricePerPerson: number; bookingUrl: string };
+  setManualVenue: (venue: { name: string; address: string; category: string; pricePerPerson: number; bookingUrl: string }) => void;
+  addManualVenue: (event: FormEvent<HTMLFormElement>) => void;
   selectedVenueId: string;
   setSelectedVenueId: (id: string) => void;
   setVote: (participantId: string, venueId: string, vote: VoteValue) => void;
@@ -721,6 +810,36 @@ function VotingPage(props: {
           {buildVoteStory(leadingVenue, props.votes, props.participants)}
         </div>
       </div>
+      <form onSubmit={props.addManualVenue} className="grid gap-3 rounded-lg bg-white/94 p-5 shadow-soft lg:grid-cols-[1fr_1fr_1fr_120px]">
+        <input
+          value={props.manualVenue.name}
+          onChange={(event) => props.setManualVenue({ ...props.manualVenue, name: event.target.value })}
+          placeholder="Add a place"
+          className="field"
+          required
+        />
+        <input
+          value={props.manualVenue.address}
+          onChange={(event) => props.setManualVenue({ ...props.manualVenue, address: event.target.value })}
+          placeholder="Address or area"
+          className="field"
+          required
+        />
+        <input
+          value={props.manualVenue.bookingUrl}
+          onChange={(event) => props.setManualVenue({ ...props.manualVenue, bookingUrl: event.target.value })}
+          placeholder="Link"
+          className="field"
+        />
+        <input
+          type="number"
+          value={props.manualVenue.pricePerPerson}
+          onChange={(event) => props.setManualVenue({ ...props.manualVenue, pricePerPerson: Number(event.target.value) })}
+          className="field"
+          min="0"
+        />
+        <button className="rounded-md bg-ink px-4 py-3 font-black text-white lg:col-span-4">Add venue candidate</button>
+      </form>
       <div className="grid gap-4 lg:grid-cols-3">
         {props.rankedVenues.map((venue, index) => {
           const ownVote = voterId ? props.votes.find((vote) => vote.participantId === voterId && vote.venueId === venue.id)?.vote : undefined;
@@ -1025,6 +1144,54 @@ function buildAvailabilityChoices(startDate: string, endDate: string): string[] 
   }
 
   return choices;
+}
+
+function buildAreaOptions(area: string, city: string): string[] {
+  const raw = `${area}, ${city}`
+    .split(/,|\/|\bor\b|\band\b/i)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return Array.from(new Set(raw)).slice(0, 6);
+}
+
+function getResponseToken(inviteCode: string): string {
+  if (typeof window === "undefined") return crypto.randomUUID().replace(/-/g, "");
+  const key = `actually-free-response-${inviteCode}`;
+  const existing = window.localStorage.getItem(key);
+  if (existing) return existing;
+  const token = crypto.randomUUID().replace(/-/g, "");
+  window.localStorage.setItem(key, token);
+  return token;
+}
+
+function saveResponseToken(inviteCode: string, token?: string) {
+  if (typeof window !== "undefined" && token) {
+    window.localStorage.setItem(`actually-free-response-${inviteCode}`, token);
+  }
+}
+
+function downloadTextExport(plan: Plan, participants: Participant[], rankedTimes: RankedTime[], rankedVenues: RankedVenue[], votes: Vote[]) {
+  const lines = [
+    plan.title,
+    `${formatDateRange(plan.startDate, plan.endDate)} · ${plan.area}, ${plan.city}`,
+    `Responded: ${participants.length}/${plan.expectedGuestCount || "?"}`,
+    "",
+    "Availability",
+    ...rankedTimes.map((slot) => `${formatSlot(slot)} · ${slot.availableParticipantIds.length}/${participants.length}`),
+    "",
+    "Participants",
+    ...participants.map((participant) => `${participant.name} · ${participant.startingLocation} · areas: ${participant.areaPreferences.join(", ") || "none"}`),
+    "",
+    "Venues",
+    ...rankedVenues.map((venue) => `${venue.name} · ${venue.address} · ${votes.filter((vote) => vote.venueId === venue.id).length} votes`)
+  ];
+  const file = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${plan.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "plan"}-summary.txt`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 async function apiRequest<T = unknown>(path: string, init?: RequestInit): Promise<T> {

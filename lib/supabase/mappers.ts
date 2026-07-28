@@ -25,6 +25,8 @@ export function mapPlan(row: PlanRow): Plan {
     organizerName: row.organizer_name,
     inviteCode: row.invite_code,
     preferredDate: row.preferred_date ?? row.start_date,
+    expectedGuestCount: row.expected_guest_count,
+    responseDeadline: row.response_deadline,
     status: row.status,
     createdAt: row.created_at
   };
@@ -37,6 +39,8 @@ export function mapParticipant(row: ParticipantRow, availabilityRows: Availabili
     startingLocation: row.starting_location,
     budgetMax: row.budget_max,
     dietaryPreferences: row.dietary_preferences,
+    areaPreferences: row.area_preferences,
+    responseToken: row.response_token,
     availability: availabilityRows
       .filter((availability) => availability.participant_id === row.id)
       .map((availability) => ({

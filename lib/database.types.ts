@@ -24,6 +24,8 @@ export type Database = {
           status: Database["public"]["Enums"]["plan_status"];
           max_travel_minutes: number;
           preferred_date: string | null;
+          expected_guest_count: number;
+          response_deadline: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -42,6 +44,8 @@ export type Database = {
           status?: Database["public"]["Enums"]["plan_status"];
           max_travel_minutes: number;
           preferred_date?: string | null;
+          expected_guest_count?: number;
+          response_deadline?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -56,6 +60,8 @@ export type Database = {
           starting_location: string;
           budget_max: number;
           dietary_preferences: string[];
+          area_preferences: string[];
+          response_token: string;
           created_at: string;
           updated_at: string;
         };
@@ -66,6 +72,8 @@ export type Database = {
           starting_location: string;
           budget_max: number;
           dietary_preferences?: string[];
+          area_preferences?: string[];
+          response_token?: string;
           created_at?: string;
           updated_at?: string;
         };

@@ -13,6 +13,8 @@ export async function POST(request: Request, context: { params: Promise<{ invite
       startingLocation: String(body.startingLocation || ""),
       budgetMax: Number(body.budgetMax),
       dietaryPreferences: Array.isArray(body.dietaryPreferences) ? body.dietaryPreferences.map(String) : [],
+      areaPreferences: Array.isArray(body.areaPreferences) ? body.areaPreferences.map(String) : [],
+      responseToken: typeof body.responseToken === "string" ? body.responseToken : undefined,
       availability: Array.isArray(body.availability)
         ? body.availability.map((slot: { start: string; end: string }) => ({
             start: new Date(slot.start),

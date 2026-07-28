@@ -19,6 +19,8 @@ export type Plan = {
   organizerName: string;
   inviteCode: string;
   preferredDate: string;
+  expectedGuestCount: number;
+  responseDeadline: string | null;
   status: "draft" | "collecting" | "voting" | "confirmed" | "cancelled";
   createdAt: string;
 };
@@ -29,6 +31,8 @@ export type Participant = {
   startingLocation: string;
   budgetMax: number;
   dietaryPreferences: string[];
+  areaPreferences: string[];
+  responseToken?: string;
   availability: TimeSlot[];
 };
 
