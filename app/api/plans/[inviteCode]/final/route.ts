@@ -18,8 +18,15 @@ export async function PUT(request: Request, context: { params: Promise<{ inviteC
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to confirm final plan.";
+    const message = formatErrorMessage(error, "Unable to confirm final plan.");
     const status = message.includes("Plan not found") ? 404 : message.includes("Missing NEXT_PUBLIC_SUPABASE_URL") ? 503 : 400;
     return NextResponse.json({ error: message }, { status });
   }
+}
+
+function formatErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) return fallback;
+  const detail = "details" in error && typeof error.details === "string" ? error.details : "";
+  const code = "code" in error && typeof error.code === "string" ? ` (${error.code})` : "";
+  return [error.message, detail].filter(Boolean).join(": ") + code;
 }

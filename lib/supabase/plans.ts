@@ -172,10 +172,12 @@ export async function confirmFinalPlanRecord(
 ) {
   const bundle = await getPlanBundleByInviteCode(supabase, inviteCode);
   if (!bundle) throw new Error("Plan not found.");
+  const venueId = resolveVenueId(bundle.venues, input.venueId);
+  if (!venueId) throw new Error("Selected venue was not found for this plan. Reload the invite and choose a place again.");
 
   const { error: finalError } = await supabase.from("final_plans").upsert({
     plan_id: bundle.plan.id,
-    venue_id: input.venueId,
+    venue_id: venueId,
     final_date: toDate(input.slot.start),
     final_start_time: toTime(input.slot.start),
     final_end_time: toTime(input.slot.end),
@@ -188,4 +190,13 @@ export async function confirmFinalPlanRecord(
   if (planError) throw planError;
 
   return { ok: true };
+}
+
+function resolveVenueId(venues: PlanBundle["venues"], selectedVenueId: string): string | null {
+  const exactVenue = venues.find((venue) => venue.id === selectedVenueId || venue.externalPlaceId === selectedVenueId);
+  if (exactVenue) return exactVenue.id;
+
+  const demoVenue = demoVenues.find((venue) => venue.id === selectedVenueId);
+  const matchingStoredVenue = demoVenue ? venues.find((venue) => venue.name === demoVenue.name) : null;
+  return matchingStoredVenue?.id ?? null;
 }

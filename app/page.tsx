@@ -185,7 +185,7 @@ export function ActuallyFreeApp() {
     } catch (error) {
       setPlan(nextPlan);
       setPlanVenues(demoVenues);
-      setNotice(apiFallbackMessage(error, "Supabase is not configured, so this plan is only in this browser session."));
+      setNotice(apiFallbackMessage(error, "Plan was not saved to Supabase; it is only in this browser session."));
     }
     setParticipants([]);
     setVotes([]);
@@ -220,7 +220,7 @@ export function ActuallyFreeApp() {
       setNotice("Response saved to Supabase.");
     } catch (error) {
       setParticipants((current) => [...current.filter((participant) => participant.id !== id), nextParticipant]);
-      setNotice(apiFallbackMessage(error, "Supabase is not configured, so this response is only in this browser session."));
+      setNotice(apiFallbackMessage(error, "Response was not saved to Supabase; it is only in this browser session."));
     }
     setScreen("status");
   }
@@ -238,7 +238,7 @@ export function ActuallyFreeApp() {
       });
       setNotice("Vote saved to Supabase.");
     } catch (error) {
-      setNotice(apiFallbackMessage(error, "Supabase is not configured, so this vote is only in this browser session."));
+      setNotice(apiFallbackMessage(error, "Vote was not saved to Supabase; it is only in this browser session."));
     }
   }
 
@@ -258,7 +258,7 @@ export function ActuallyFreeApp() {
       });
       setNotice("Final plan saved to Supabase.");
     } catch (error) {
-      setNotice(apiFallbackMessage(error, "Supabase is not configured, so this confirmation is only in this browser session."));
+      setNotice(apiFallbackMessage(error, "Confirmation was not saved to Supabase; it is only in this browser session."));
     }
     setScreen("final");
   }
