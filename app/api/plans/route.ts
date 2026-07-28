@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiErrorResponse } from "@/lib/api/errors";
 import { createPlanRecord } from "@/lib/supabase/plans";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -18,12 +19,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json(bundle);
   } catch (error) {
-    return handleApiError(error);
+    return apiErrorResponse(error, "Unable to create plan.");
   }
-}
-
-function handleApiError(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unable to create plan.";
-  const status = message.includes("Missing NEXT_PUBLIC_SUPABASE_URL") ? 503 : 400;
-  return NextResponse.json({ error: message }, { status });
 }

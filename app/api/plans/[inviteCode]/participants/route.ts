@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiErrorResponse } from "@/lib/api/errors";
 import { addParticipantRecord } from "@/lib/supabase/plans";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -21,8 +22,6 @@ export async function POST(request: Request, context: { params: Promise<{ invite
 
     return NextResponse.json({ participant });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to add participant.";
-    const status = message.includes("Plan not found") ? 404 : message.includes("Missing NEXT_PUBLIC_SUPABASE_URL") ? 503 : 400;
-    return NextResponse.json({ error: message }, { status });
+    return apiErrorResponse(error, "Unable to add participant.");
   }
 }
