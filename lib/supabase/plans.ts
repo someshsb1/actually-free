@@ -20,6 +20,7 @@ export async function createPlanRecord(
     startDate: string;
     endDate: string;
     budgetMax: number;
+    city: string;
     area: string;
     maxTravelMinutes: number;
     organizerName: string;
@@ -35,6 +36,7 @@ export async function createPlanRecord(
       start_date: input.startDate,
       end_date: input.endDate,
       budget_max: input.budgetMax,
+      city: input.city || "Unspecified",
       time_zone: input.timeZone,
       preferred_area: input.area,
       organizer_name: input.organizerName,

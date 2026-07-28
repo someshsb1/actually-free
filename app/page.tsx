@@ -6,6 +6,7 @@ import {
   ActivityType,
   Participant,
   Plan,
+  RankedTime,
   RankedVenue,
   TimeSlot,
   Vote,
@@ -121,7 +122,7 @@ export function ActuallyFreeApp() {
       startDate,
       endDate: String(form.get("endDate")),
       budgetMax: Number(form.get("budgetMax")),
-      city: "New York City",
+      city: String(form.get("city") || ""),
       timeZone: String(form.get("timeZone") || getBrowserTimeZone()),
       area: String(form.get("area")),
       maxTravelMinutes: Number(form.get("maxTravelMinutes")),
@@ -263,6 +264,9 @@ export function ActuallyFreeApp() {
             plan={plan}
             participants={participants}
             bestTime={bestTime}
+            rankedTimes={rankedTimes}
+            rankedVenues={rankedVenues}
+            votes={votes}
             onInvite={() => setScreen("invite")}
             onVote={() => setScreen("vote")}
           />
@@ -289,6 +293,7 @@ export function ActuallyFreeApp() {
             confirmed={confirmed}
             googleUrl={buildGoogleCalendarUrl(plan, selectedVenue, bestTime)}
             onDownloadIcs={downloadIcs}
+            inviteUrl={inviteUrl}
           />
         )}
       </div>
@@ -331,14 +336,19 @@ function Landing({ onCreate }: { onCreate: () => void }) {
     <section className="grid flex-1 items-end pb-10 pt-20 sm:pt-28">
       <div className="max-w-2xl">
         <p className="mb-4 inline-flex rounded-md bg-white/90 px-3 py-2 text-sm font-bold text-lake shadow-soft">
-          Dinner and brunch groups in NYC
+          No accounts. No group-chat chaos. One link.
         </p>
         <h1 className="text-5xl font-black leading-none tracking-normal text-ink sm:text-7xl">
-          Stop planning plans. Start making them.
+          Find the time and place your group can agree on.
         </h1>
         <p className="mt-5 max-w-xl text-lg font-semibold leading-7 text-ink/80">
-          Actually Free finds when your friends are available and recommends places that work for everyone.
+          Send one invite, watch the plan come together, and land on a fair option without the endless back-and-forth.
         </p>
+        <div className="mt-6 grid max-w-xl gap-2 sm:grid-cols-3">
+          <MiniStat value="30 sec" label="Friend response" />
+          <MiniStat value="3 picks" label="Only the best places" />
+          <MiniStat value="Fair" label="Commute-aware ranking" />
+        </div>
         <button
           onClick={onCreate}
           className="mt-8 rounded-md bg-tomato px-5 py-4 text-base font-black text-white shadow-soft transition hover:bg-[#bd4f39]"
@@ -389,6 +399,9 @@ function CreatePlanForm({ plan, onSubmit }: { plan: Plan; onSubmit: (event: Form
         <Field label="Preferred area">
           <input name="area" defaultValue={plan.area} placeholder="Manhattan, Bandra, Indiranagar" className="field" required />
         </Field>
+        <Field label="City or region">
+          <input name="city" defaultValue={plan.city} placeholder="New York, Mumbai, Bengaluru" className="field" required />
+        </Field>
         <Field label="Plan timezone">
           <input name="timeZone" defaultValue={plan.timeZone} className="field" required />
         </Field>
@@ -409,9 +422,22 @@ function InvitePage({
   onJoin: () => void;
   onStatus: () => void;
 }) {
+  const shareText = `${plan.title}\n${titleCase(plan.activityType)} · ${formatDateRange(plan.startDate, plan.endDate)}\n${plan.area} · under $${plan.budgetMax}\n\nHelp pick the time and place: ${inviteUrl}`;
+  const encodedShareText = encodeURIComponent(shareText);
+
   return (
     <section className="mx-auto w-full max-w-2xl rounded-lg bg-white/94 p-5 shadow-soft">
       <ScreenTitle eyebrow="Share invitation" title={plan.title} />
+      <div className="mt-5 rounded-lg bg-ink p-5 text-white">
+        <p className="text-sm font-black uppercase tracking-normal text-white/60">Plan card</p>
+        <h2 className="mt-2 text-3xl font-black tracking-normal">{plan.title}</h2>
+        <p className="mt-3 font-bold text-white/82">
+          {titleCase(plan.activityType)} · {formatDateRange(plan.startDate, plan.endDate)}
+        </p>
+        <p className="mt-1 font-bold text-white/82">
+          {plan.area} · under ${plan.budgetMax} · max {plan.maxTravelMinutes} min
+        </p>
+      </div>
       <div className="mt-5 rounded-lg border border-ink/10 bg-paper p-4">
         <p className="text-sm font-bold text-ink/60">Invite link</p>
         <a
@@ -432,6 +458,19 @@ function InvitePage({
         </button>
         <a href={inviteUrl} target="_blank" rel="noreferrer" className="rounded-md bg-ink px-4 py-3 text-center font-black text-white">
           Open invite
+        </a>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <a href={`sms:?&body=${encodedShareText}`} className="rounded-md bg-saffron px-4 py-3 text-center font-black text-ink">
+          Share by text
+        </a>
+        <a
+          href={`https://wa.me/?text=${encodedShareText}`}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-md bg-moss px-4 py-3 text-center font-black text-white"
+        >
+          Share on WhatsApp
         </a>
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -462,10 +501,19 @@ function JoinForm(props: {
 }) {
   const { plan, joinDietary, setJoinDietary, joinAvailability, setJoinAvailability } = props;
   const dateChoices = buildAvailabilityChoices(plan.startDate, plan.endDate);
+  const responseProgress =
+    Number(Boolean(props.joinName.trim())) +
+    Number(Boolean(props.joinLocation.trim())) +
+    Number(joinAvailability.length > 0);
 
   return (
     <section className="mx-auto w-full max-w-2xl rounded-lg bg-white/94 p-5 shadow-soft">
       <ScreenTitle eyebrow="No account needed" title={`Join ${plan.title}`} />
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <MiniStat value={`${responseProgress}/3`} label="Done" />
+        <MiniStat value={`${joinAvailability.length}`} label="Slots" />
+        <MiniStat value={`$${props.joinBudget}`} label="Budget" />
+      </div>
       <form onSubmit={props.onSubmit} className="mt-5 grid gap-4">
         <Field label="Name">
           <input value={props.joinName} onChange={(event) => props.setJoinName(event.target.value)} placeholder="Your name" className="field" required />
@@ -480,13 +528,21 @@ function JoinForm(props: {
           />
         </Field>
         <Field label="Budget preference">
-          <input
-            type="number"
-            min="10"
-            value={props.joinBudget}
-            onChange={(event) => props.setJoinBudget(Number(event.target.value))}
-            className="field"
-          />
+          <div className="rounded-md border border-ink/15 bg-white px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-bold text-ink/60">Comfortable up to</span>
+              <span className="text-xl font-black text-ink">${props.joinBudget}</span>
+            </div>
+            <input
+              type="range"
+              min="10"
+              max="150"
+              step="5"
+              value={props.joinBudget}
+              onChange={(event) => props.setJoinBudget(Number(event.target.value))}
+              className="mt-3 w-full accent-lake"
+            />
+          </div>
         </Field>
         <ChoiceGroup
           label="Available time slots"
@@ -510,17 +566,35 @@ function StatusPage({
   plan,
   participants,
   bestTime,
+  rankedTimes,
+  rankedVenues,
+  votes,
   onInvite,
   onVote
 }: {
   plan: Plan;
   participants: Participant[];
   bestTime?: TimeSlot & { availableParticipantIds: string[] };
+  rankedTimes: RankedTime[];
+  rankedVenues: RankedVenue[];
+  votes: Vote[];
   onInvite: () => void;
   onVote: () => void;
 }) {
+  const perfectMatches = rankedTimes.filter((slot) => participants.length > 0 && slot.availableParticipantIds.length === participants.length).length;
+  const leadingVenue = getLeadingVenue(rankedVenues, votes);
+
   return (
-    <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+    <section className="grid gap-5">
+      <div className="rounded-lg bg-white/94 p-5 shadow-soft">
+        <ScreenTitle eyebrow="Plan pulse" title="The group is converging" />
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <PulseCard value={`${participants.length}`} label="friends responded" tone="lake" />
+          <PulseCard value={`${perfectMatches}`} label="perfect time matches" tone="moss" />
+          <PulseCard value={leadingVenue?.name ?? "No winner yet"} label="place currently leading" tone="tomato" />
+        </div>
+      </div>
+      <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
       <div className="rounded-lg bg-white/94 p-5 shadow-soft">
         <ScreenTitle eyebrow={`${participants.length} ${participants.length === 1 ? "person has" : "people have"} responded`} title={plan.title} />
         <div className="mt-5 grid gap-2">
@@ -536,7 +610,7 @@ function StatusPage({
           )}
         </div>
         <button onClick={onInvite} className="mt-4 w-full rounded-md border border-ink/15 px-4 py-3 font-black text-ink">
-          Copy invite link
+          Share invite
         </button>
       </div>
       <div className="rounded-lg bg-ink p-5 text-white shadow-soft">
@@ -550,6 +624,19 @@ function StatusPage({
         <button onClick={onVote} className="mt-6 w-full rounded-md bg-saffron px-4 py-4 font-black text-ink">
           Choose a place
         </button>
+      </div>
+      </div>
+      <div className="rounded-lg bg-white/94 p-5 shadow-soft">
+        <ScreenTitle eyebrow="Availability heatmap" title="Best overlap windows" />
+        <div className="mt-4 grid gap-2">
+          {rankedTimes.length && participants.length ? (
+            rankedTimes.map((slot) => (
+              <HeatmapRow key={`${slot.start.toISOString()}-${slot.end.toISOString()}`} slot={slot} total={participants.length} />
+            ))
+          ) : (
+            <div className="rounded-md border border-ink/10 px-3 py-3 font-bold text-ink/55">Responses will turn into a live overlap map here.</div>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -566,7 +653,8 @@ function VotingPage(props: {
   setVote: (participantId: string, venueId: string, vote: VoteValue) => void;
   onConfirm: () => void;
 }) {
-  const voterId = props.participants[props.participants.length - 1]?.id ?? "maya";
+  const voterId = props.participants[props.participants.length - 1]?.id;
+  const leadingVenue = getLeadingVenue(props.rankedVenues, props.votes);
 
   return (
     <section className="grid gap-5">
@@ -575,10 +663,15 @@ function VotingPage(props: {
         <p className="mt-2 text-sm font-semibold text-ink/65">
           Ranked by travel equity, budget, rating, dietary fit, and booking confidence.
         </p>
+        <div className="mt-4 rounded-md bg-paper px-3 py-3 text-sm font-bold text-ink/70">
+          {leadingVenue ? `${leadingVenue.name} is winning right now.` : "Votes will appear here as people choose."}{" "}
+          {buildVoteStory(leadingVenue, props.votes, props.participants)}
+        </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         {props.rankedVenues.map((venue, index) => {
-          const ownVote = props.votes.find((vote) => vote.participantId === voterId && vote.venueId === venue.id)?.vote;
+          const ownVote = voterId ? props.votes.find((vote) => vote.participantId === voterId && vote.venueId === venue.id)?.vote : undefined;
+          const voteBreakdown = getVoteBreakdown(venue.id, props.votes);
           return (
             <article
               key={venue.id}
@@ -597,20 +690,31 @@ function VotingPage(props: {
                 {venue.category} · {venue.priceLevel} · ${venue.pricePerPerson}/person
               </p>
               <p className="mt-3 text-sm leading-6 text-ink/75">{venue.why}</p>
+              <div className="mt-3 grid gap-2">
+                {buildVenueReasons(venue, props.plan, props.participants).map((reason) => (
+                  <div key={reason} className="rounded-md bg-paper px-3 py-2 text-sm font-bold text-ink/70">
+                    {reason}
+                  </div>
+                ))}
+              </div>
               <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
                 <Metric label="Avg travel" value={`${venue.averageTravelTime} min`} />
                 <Metric label="Longest trip" value={`${venue.worstTravelTime} min`} />
                 <Metric label="Rating" value={venue.rating.toFixed(1)} />
                 <Metric label="Votes" value={`${props.voteTotals[venue.id] ?? 0} pts`} />
               </div>
+              <p className="mt-3 text-xs font-black uppercase tracking-normal text-ink/45">
+                {voteBreakdown.first} first · {voteBreakdown.acceptable} okay · {voteBreakdown.no} no
+              </p>
               <div className="mt-4 grid grid-cols-3 gap-2">
                 {(["first", "acceptable", "no"] as VoteValue[]).map((vote) => (
                   <button
                     key={vote}
-                    onClick={() => props.setVote(voterId, venue.id, vote)}
+                    onClick={() => voterId && props.setVote(voterId, venue.id, vote)}
+                    disabled={!voterId}
                     className={`min-h-12 rounded-md border px-2 text-sm font-black ${
                       ownVote === vote ? "border-ink bg-ink text-white" : "border-ink/15 text-ink"
-                    }`}
+                    } disabled:cursor-not-allowed disabled:opacity-45`}
                   >
                     {vote === "first" ? "First" : vote === "acceptable" ? "Okay" : "No"}
                   </button>
@@ -626,7 +730,7 @@ function VotingPage(props: {
           );
         })}
       </div>
-      <button onClick={props.onConfirm} className="rounded-md bg-tomato px-4 py-4 font-black text-white shadow-soft">
+      <button onClick={props.onConfirm} disabled={!props.participants.length} className="rounded-md bg-tomato px-4 py-4 font-black text-white shadow-soft disabled:cursor-not-allowed disabled:opacity-50">
         Confirm final plan
       </button>
     </section>
@@ -641,10 +745,15 @@ function FinalPage(props: {
   confirmed: boolean;
   googleUrl: string;
   onDownloadIcs: () => void;
+  inviteUrl: string;
 }) {
+  const confirmationText = `${props.plan.title} is set.\n${formatSlot(props.slot)}\n${props.venue.name}\n${props.venue.address}`;
+  const encodedConfirmation = encodeURIComponent(confirmationText);
+  const replacedMessages = Math.max(12, props.participants.length * 8 + 13);
+
   return (
     <section className="mx-auto w-full max-w-3xl rounded-lg bg-white/94 p-5 shadow-soft">
-      <ScreenTitle eyebrow={props.confirmed ? "Confirmed" : "Final plan"} title={props.plan.title} />
+      <ScreenTitle eyebrow={props.confirmed ? "We’re set" : "Final plan"} title={props.plan.title} />
       <div className="mt-5 grid gap-4">
         <div className="rounded-lg bg-ink p-5 text-white">
           <p className="text-sm font-bold uppercase tracking-normal text-white/65">Time and place</p>
@@ -652,11 +761,16 @@ function FinalPage(props: {
           <p className="mt-2 text-white/80">{props.venue.address}</p>
           <p className="mt-4 text-xl font-black">{formatSlot(props.slot)}</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Metric label="Attendees" value={props.participants.map((participant) => participant.name).join(", ")} />
-          <Metric label="Reservation" value="Link ready" />
-        </div>
         <div className="grid gap-3 sm:grid-cols-3">
+          <Metric label="Attendees" value={props.participants.map((participant) => participant.name).join(", ") || "No responses yet"} />
+          <Metric label="Reservation" value="Link ready" />
+          <Metric label="Messages replaced" value={`${replacedMessages}`} />
+        </div>
+        <div className="rounded-lg bg-paper p-4">
+          <p className="text-sm font-black uppercase tracking-normal text-ink/45">Shareable confirmation</p>
+          <p className="mt-2 whitespace-pre-line text-sm font-bold leading-6 text-ink/75">{confirmationText}</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-4">
           <a
             href={props.venue.bookingUrl}
             target="_blank"
@@ -670,6 +784,9 @@ function FinalPage(props: {
           <button onClick={props.onDownloadIcs} className="rounded-md border border-ink/15 px-4 py-3 font-black text-ink">
             Download .ics
           </button>
+          <a href={`sms:?&body=${encodedConfirmation}`} className="rounded-md border border-ink/15 px-4 py-3 text-center font-black text-ink">
+            Share final
+          </a>
         </div>
       </div>
     </section>
@@ -743,11 +860,99 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function MiniStat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="rounded-md bg-white/90 px-3 py-3 shadow-soft">
+      <p className="text-lg font-black leading-none text-ink">{value}</p>
+      <p className="mt-1 text-xs font-black uppercase tracking-normal text-ink/45">{label}</p>
+    </div>
+  );
+}
+
+function PulseCard({ value, label, tone }: { value: string; label: string; tone: "lake" | "moss" | "tomato" }) {
+  const toneClass = tone === "lake" ? "bg-lake" : tone === "moss" ? "bg-moss" : "bg-tomato";
+
+  return (
+    <div className="rounded-lg border border-ink/10 bg-paper p-4">
+      <div className={`mb-3 h-2 w-12 rounded-full ${toneClass}`} />
+      <p className="truncate text-2xl font-black tracking-normal text-ink">{value}</p>
+      <p className="mt-1 text-sm font-bold text-ink/58">{label}</p>
+    </div>
+  );
+}
+
+function HeatmapRow({ slot, total }: { slot: RankedTime; total: number }) {
+  const available = slot.availableParticipantIds.length;
+  const percent = total ? Math.round((available / total) * 100) : 0;
+  const isPerfect = total > 0 && available === total;
+
+  return (
+    <div className="grid gap-2 rounded-md border border-ink/10 px-3 py-3 sm:grid-cols-[1fr_150px_70px] sm:items-center">
+      <p className="font-black text-ink">{formatSlot(slot)}</p>
+      <div className="h-3 overflow-hidden rounded-full bg-ink/10">
+        <div className={`h-full ${isPerfect ? "bg-moss" : "bg-lake"}`} style={{ width: `${percent}%` }} />
+      </div>
+      <p className="text-sm font-black text-ink/65">
+        {available}/{total}
+      </p>
+    </div>
+  );
+}
+
 function titleCase(value: string): string {
   return value
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function getLeadingVenue(venues: RankedVenue[], votes: Vote[]): RankedVenue | null {
+  if (!venues.length) return null;
+  const totals = calculateVoteTotals(
+    votes,
+    venues.map((venue) => venue.id)
+  );
+  const sorted = [...venues].sort((a, b) => (totals[b.id] ?? 0) - (totals[a.id] ?? 0) || b.score - a.score);
+  return sorted[0] ?? null;
+}
+
+function getVoteBreakdown(venueId: string, votes: Vote[]) {
+  return votes
+    .filter((vote) => vote.venueId === venueId)
+    .reduce(
+      (breakdown, vote) => {
+        breakdown[vote.vote] += 1;
+        return breakdown;
+      },
+      { first: 0, acceptable: 0, no: 0 } as Record<VoteValue, number>
+    );
+}
+
+function buildVoteStory(venue: RankedVenue | null, votes: Vote[], participants: Participant[]): string {
+  if (!venue) return "";
+  const firstChoiceNames = votes
+    .filter((vote) => vote.venueId === venue.id && vote.vote === "first")
+    .map((vote) => participants.find((participant) => participant.id === vote.participantId)?.name)
+    .filter(Boolean);
+  const noVotes = votes.filter((vote) => vote.venueId === venue.id && vote.vote === "no").length;
+
+  if (!firstChoiceNames.length && noVotes === 0) return "No one has objected yet.";
+  const firstChoiceText = firstChoiceNames.length ? `${firstChoiceNames.join(", ")} picked it first.` : "";
+  const noText = noVotes === 0 ? "No one said no." : `${noVotes} ${noVotes === 1 ? "person said" : "people said"} no.`;
+  return [firstChoiceText, noText].filter(Boolean).join(" ");
+}
+
+function buildVenueReasons(venue: RankedVenue, plan: Plan, participants: Participant[]): string[] {
+  const underBudget = venue.pricePerPerson <= plan.budgetMax;
+  const fairTravel = venue.worstTravelTime <= plan.maxTravelMinutes;
+  const dietaryNeeds = new Set(participants.flatMap((participant) => participant.dietaryPreferences));
+  const matchingDietary = Array.from(dietaryNeeds).filter((tag) => venue.dietaryTags.includes(tag));
+
+  return [
+    fairTravel ? `Fair commute: no one above ${venue.worstTravelTime} min` : `Watch commute: longest trip is ${venue.worstTravelTime} min`,
+    underBudget ? `Fits the $${plan.budgetMax} budget` : `$${venue.pricePerPerson} average is above budget`,
+    matchingDietary.length ? `Covers ${matchingDietary.join(", ")}` : "Flexible menu for a mixed group"
+  ];
 }
 
 function formatSlotLabel(value: string): string {
