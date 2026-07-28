@@ -99,11 +99,24 @@ export function toVenueInsert(planId: string, venue: Venue) {
 }
 
 export function toDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
 }
 
 export function toTime(date: Date): string {
-  return date.toTimeString().slice(0, 8);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.hour}:${byType.minute}:${byType.second}`;
 }
 
 function isTravelTimes(value: Json): value is Record<string, number> {
