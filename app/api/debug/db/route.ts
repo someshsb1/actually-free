@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { formatApiError } from "@/lib/api/errors";
+import { formatApiError, summarizeApiError } from "@/lib/api/errors";
 import { createServiceClient } from "@/lib/supabase/server";
 
 const tables = ["plans", "participants", "availability", "venues", "votes", "final_plans"] as const;
@@ -9,12 +9,12 @@ export async function GET() {
     const supabase = createServiceClient();
     const checks = await Promise.all(
       tables.map(async (table) => {
-        const { count, error } = await supabase.from(table).select("*", { count: "exact", head: true });
+        const { data, error } = await supabase.from(table).select("*").limit(1);
         return {
           table,
           ok: !error,
-          count: count ?? null,
-          error: error ? formatApiError(error, "Table check failed.") : null
+          readable: Array.isArray(data),
+          error: error ? summarizeApiError(error, "Table check failed.") : null
         };
       })
     );
