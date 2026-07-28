@@ -107,7 +107,7 @@ export function ActuallyFreeApp() {
   const [votes, setVotes] = useState<Vote[]>(seededVotes);
   const [selectedVenueId, setSelectedVenueId] = useState("tacombi");
   const [confirmed, setConfirmed] = useState(false);
-  const [notice, setNotice] = useState("Demo mode until Supabase env vars are added.");
+  const [notice, setNotice] = useState("Ready to create a plan.");
   const [joinName, setJoinName] = useState("Priya");
   const [joinLocation, setJoinLocation] = useState("Sunnyside");
   const [joinBudget, setJoinBudget] = useState(50);
