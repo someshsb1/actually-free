@@ -325,9 +325,16 @@ export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?:
         {screen === "invite" && (
           <InvitePage plan={plan} inviteUrl={inviteUrl} onJoin={() => setScreen("join")} onStatus={() => setScreen("status")} />
         )}
-        {screen === "join" && (
-          <JoinForm
+        {["join", "status", "vote"].includes(screen) && (
+          <PlanRoom
             plan={plan}
+            inviteUrl={inviteUrl}
+            participants={participants}
+            bestTime={bestTime}
+            rankedTimes={rankedTimes}
+            rankedVenues={rankedVenues}
+            votes={votes}
+            voteTotals={voteTotals}
             joinName={joinName}
             setJoinName={setJoinName}
             joinLocation={joinLocation}
@@ -340,38 +347,18 @@ export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?:
             setJoinAreas={setJoinAreas}
             joinAvailability={joinAvailability}
             setJoinAvailability={setJoinAvailability}
-            onSubmit={addParticipant}
-          />
-        )}
-        {screen === "status" && (
-          <StatusPage
-            plan={plan}
-            participants={participants}
-            bestTime={bestTime}
-            rankedTimes={rankedTimes}
-            rankedVenues={rankedVenues}
-            votes={votes}
+            submitResponse={addParticipant}
             updateStatus={updatePlanStatus}
             removeParticipant={removeParticipant}
             exportSummary={() => downloadTextExport(plan, participants, rankedTimes, rankedVenues, votes)}
-            onInvite={() => setScreen("invite")}
-            onVote={() => setScreen("vote")}
-          />
-        )}
-        {screen === "vote" && (
-          <VotingPage
-            plan={plan}
-            participants={participants}
-            rankedVenues={rankedVenues}
-            votes={votes}
-            voteTotals={voteTotals}
             manualVenue={manualVenue}
             setManualVenue={setManualVenue}
             addManualVenue={addManualVenue}
             selectedVenueId={selectedVenueId}
             setSelectedVenueId={setSelectedVenueId}
             setVote={setVote}
-            onConfirm={confirmFinalPlan}
+            confirmFinalPlan={confirmFinalPlan}
+            openInvite={() => setScreen("invite")}
           />
         )}
         {screen === "final" && bestTime && selectedVenue && (
@@ -393,11 +380,11 @@ export function ActuallyFreeApp({ initialScreen = "landing" }: { initialScreen?:
 
 function TopBar({ screen, setScreen }: { screen: Screen; setScreen: (screen: Screen) => void }) {
   const items: { id: Screen; label: string }[] = [
-    { id: "create", label: "Create" },
-    { id: "status", label: "Status" },
-    { id: "vote", label: "Vote" },
+    { id: "create", label: "New plan" },
+    { id: "status", label: "Room" },
     { id: "final", label: "Final" }
   ];
+  const activeItem = ["join", "status", "vote"].includes(screen) ? "status" : screen;
 
   return (
     <header className="mb-5 flex items-center justify-between gap-3 rounded-lg bg-white/88 px-3 py-3 shadow-soft backdrop-blur">
@@ -410,7 +397,7 @@ function TopBar({ screen, setScreen }: { screen: Screen; setScreen: (screen: Scr
             key={item.id}
             onClick={() => setScreen(item.id)}
             className={`rounded-md px-3 py-2 text-sm font-bold transition ${
-              screen === item.id ? "bg-ink text-white" : "text-ink hover:bg-ink/10"
+              activeItem === item.id ? "bg-ink text-white" : "text-ink hover:bg-ink/10"
             }`}
           >
             {item.label}
@@ -445,6 +432,171 @@ function Landing({ onCreate }: { onCreate: () => void }) {
         >
           Create a plan
         </button>
+      </div>
+    </section>
+  );
+}
+
+function PlanRoom(props: {
+  plan: Plan;
+  inviteUrl: string;
+  participants: Participant[];
+  bestTime?: TimeSlot & { availableParticipantIds: string[] };
+  rankedTimes: RankedTime[];
+  rankedVenues: RankedVenue[];
+  votes: Vote[];
+  voteTotals: Record<string, number>;
+  joinName: string;
+  setJoinName: (value: string) => void;
+  joinLocation: string;
+  setJoinLocation: (value: string) => void;
+  joinBudget: number;
+  setJoinBudget: (value: number) => void;
+  joinDietary: string[];
+  setJoinDietary: (value: string[]) => void;
+  joinAreas: string[];
+  setJoinAreas: (value: string[]) => void;
+  joinAvailability: string[];
+  setJoinAvailability: (value: string[]) => void;
+  submitResponse: (event: FormEvent<HTMLFormElement>) => void;
+  updateStatus: (status: Plan["status"]) => void;
+  removeParticipant: (participantId: string) => void;
+  exportSummary: () => void;
+  manualVenue: { name: string; address: string; category: string; pricePerPerson: number; bookingUrl: string };
+  setManualVenue: (venue: { name: string; address: string; category: string; pricePerPerson: number; bookingUrl: string }) => void;
+  addManualVenue: (event: FormEvent<HTMLFormElement>) => void;
+  selectedVenueId: string;
+  setSelectedVenueId: (id: string) => void;
+  setVote: (participantId: string, venueId: string, vote: VoteValue) => void;
+  confirmFinalPlan: () => void;
+  openInvite: () => void;
+}) {
+  const statusUrl = props.inviteUrl.replace("/join/", "/status/");
+  const finalUrl = props.inviteUrl.replace("/join/", "/final/");
+  const deadline = props.plan.responseDeadline ? new Date(props.plan.responseDeadline).toLocaleString() : null;
+  const readyToConfirm = Boolean(props.participants.length && props.bestTime && props.rankedVenues.length);
+  const nextStep = !props.participants.length
+    ? "Collect the first response"
+    : !props.votes.length
+      ? "Ask the group to vote"
+      : readyToConfirm
+        ? "Confirm the winner"
+        : "Wait for more signal";
+
+  return (
+    <section className="grid gap-5 pb-24">
+      <div className="rounded-lg bg-ink p-5 text-white shadow-soft">
+        <div className="grid gap-5 lg:grid-cols-[1.3fr_0.7fr] lg:items-end">
+          <div>
+            <p className="text-sm font-black uppercase tracking-normal text-white/60">Plan room</p>
+            <h1 className="mt-2 text-4xl font-black leading-tight tracking-normal sm:text-5xl">{props.plan.title}</h1>
+            <p className="mt-3 font-bold text-white/78">
+              {titleCase(props.plan.activityType)} · {formatDateRange(props.plan.startDate, props.plan.endDate)} · {props.plan.area}, {props.plan.city}
+            </p>
+            {deadline && <p className="mt-2 text-sm font-bold text-saffron">Responses close {deadline}</p>}
+          </div>
+          <div className="rounded-lg bg-white/10 p-4">
+            <p className="text-xs font-black uppercase tracking-normal text-white/55">Next move</p>
+            <p className="mt-1 text-2xl font-black leading-tight">{nextStep}</p>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-2 sm:grid-cols-4">
+          <MiniStat value={`${props.participants.length}/${props.plan.expectedGuestCount || "?"}`} label="Responded" />
+          <MiniStat value={props.bestTime ? `${props.bestTime.availableParticipantIds.length}/${props.participants.length || "?"}` : "0"} label="Best overlap" />
+          <MiniStat value={`${props.rankedVenues.length}`} label="Places" />
+          <MiniStat value={`${props.votes.length}`} label="Votes" />
+        </div>
+        <div className="mt-4 grid gap-2 text-sm font-bold sm:grid-cols-3">
+          <a href={props.inviteUrl} className="rounded-md bg-white/10 px-3 py-2 text-white underline underline-offset-4">
+            Response link
+          </a>
+          <a href={statusUrl} className="rounded-md bg-white/10 px-3 py-2 text-white underline underline-offset-4">
+            Status link
+          </a>
+          <a href={finalUrl} className="rounded-md bg-white/10 px-3 py-2 text-white underline underline-offset-4">
+            Final link
+          </a>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <a href="#response" className="rounded-md bg-saffron px-4 py-3 text-center font-black text-ink">
+            Add response
+          </a>
+          <a href="#places" className="rounded-md bg-white px-4 py-3 text-center font-black text-ink">
+            Review places
+          </a>
+          <button
+            onClick={props.confirmFinalPlan}
+            disabled={!readyToConfirm}
+            className="rounded-md bg-tomato px-4 py-3 font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Confirm final
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+        <JoinForm
+          plan={props.plan}
+          joinName={props.joinName}
+          setJoinName={props.setJoinName}
+          joinLocation={props.joinLocation}
+          setJoinLocation={props.setJoinLocation}
+          joinBudget={props.joinBudget}
+          setJoinBudget={props.setJoinBudget}
+          joinDietary={props.joinDietary}
+          setJoinDietary={props.setJoinDietary}
+          joinAreas={props.joinAreas}
+          setJoinAreas={props.setJoinAreas}
+          joinAvailability={props.joinAvailability}
+          setJoinAvailability={props.setJoinAvailability}
+          onSubmit={props.submitResponse}
+        />
+        <StatusPage
+          plan={props.plan}
+          participants={props.participants}
+          bestTime={props.bestTime}
+          rankedTimes={props.rankedTimes}
+          rankedVenues={props.rankedVenues}
+          votes={props.votes}
+          updateStatus={props.updateStatus}
+          removeParticipant={props.removeParticipant}
+          exportSummary={props.exportSummary}
+          onInvite={props.openInvite}
+          onVote={() => document.getElementById("places")?.scrollIntoView({ behavior: "smooth" })}
+        />
+      </div>
+
+      <VotingPage
+        plan={props.plan}
+        participants={props.participants}
+        rankedVenues={props.rankedVenues}
+        votes={props.votes}
+        voteTotals={props.voteTotals}
+        manualVenue={props.manualVenue}
+        setManualVenue={props.setManualVenue}
+        addManualVenue={props.addManualVenue}
+        selectedVenueId={props.selectedVenueId}
+        setSelectedVenueId={props.setSelectedVenueId}
+        setVote={props.setVote}
+        onConfirm={props.confirmFinalPlan}
+      />
+
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-ink/10 bg-white/95 px-4 py-3 shadow-soft backdrop-blur sm:hidden">
+        <div className="mx-auto grid max-w-5xl grid-cols-3 gap-2">
+          <a href="#response" className="rounded-md bg-ink px-3 py-3 text-center text-sm font-black text-white">
+            Respond
+          </a>
+          <a href="#places" className="rounded-md bg-lake px-3 py-3 text-center text-sm font-black text-white">
+            Vote
+          </a>
+          <button
+            onClick={props.confirmFinalPlan}
+            disabled={!readyToConfirm}
+            className="rounded-md bg-tomato px-3 py-3 text-sm font-black text-white disabled:opacity-50"
+          >
+            Confirm
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -526,7 +678,7 @@ function InvitePage({
   const finalUrl = inviteUrl.replace("/join/", "/final/");
 
   return (
-    <section className="mx-auto w-full max-w-2xl rounded-lg bg-white/94 p-5 shadow-soft">
+    <section id="response" className="mx-auto w-full max-w-2xl scroll-mt-5 rounded-lg bg-white/94 p-5 shadow-soft">
       <ScreenTitle eyebrow="Share invitation" title={plan.title} />
       <div className="mt-5 rounded-lg bg-ink p-5 text-white">
         <p className="text-sm font-black uppercase tracking-normal text-white/60">Plan card</p>
@@ -799,7 +951,7 @@ function VotingPage(props: {
   const leadingVenue = getLeadingVenue(props.rankedVenues, props.votes);
 
   return (
-    <section className="grid gap-5">
+    <section id="places" className="grid scroll-mt-5 gap-5">
       <div className="rounded-lg bg-white/94 p-5 shadow-soft">
         <ScreenTitle eyebrow="Choose a place" title="Three recommendations" />
         <p className="mt-2 text-sm font-semibold text-ink/65">
