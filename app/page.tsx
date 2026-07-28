@@ -454,7 +454,14 @@ function InvitePage({
       <ScreenTitle eyebrow="Share invitation" title={plan.title} />
       <div className="mt-5 rounded-lg border border-ink/10 bg-paper p-4">
         <p className="text-sm font-bold text-ink/60">Invite link</p>
-        <p className="mt-2 break-all text-base font-black text-ink">{inviteUrl}</p>
+        <a
+          href={inviteUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 block break-all text-base font-black text-lake underline decoration-lake/35 underline-offset-4"
+        >
+          {inviteUrl}
+        </a>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <button
@@ -463,13 +470,18 @@ function InvitePage({
         >
           Copy invite link
         </button>
-        <button onClick={onJoin} className="rounded-md bg-ink px-4 py-3 font-black text-white">
-          Open response form
+        <a href={inviteUrl} target="_blank" rel="noreferrer" className="rounded-md bg-ink px-4 py-3 text-center font-black text-white">
+          Open invite
+        </a>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <button onClick={onJoin} className="rounded-md border border-ink/15 px-4 py-3 font-black text-ink">
+          Preview form
+        </button>
+        <button onClick={onStatus} className="rounded-md border border-ink/15 px-4 py-3 font-black text-ink">
+          View group status
         </button>
       </div>
-      <button onClick={onStatus} className="mt-3 w-full rounded-md border border-ink/15 px-4 py-3 font-black text-ink">
-        View group status
-      </button>
     </section>
   );
 }
